@@ -24,7 +24,7 @@ def load_data():
             "TEL番号": ["000-000-0000"], "FAX番号": ["000-000-0000"]
         })
 
-# --- 2. PDF作成ロジック（重なりを修正・備考への自動挿入なし） ---
+# --- 2. PDF作成ロジック（高密度レイアウト） ---
 def create_pdf(p_name, p_tel, p_fax, d_type, target_info, note_text, is_urgent):
     buffer = io.BytesIO()
     p = canvas.Canvas(buffer, pagesize=A5)
@@ -34,48 +34,48 @@ def create_pdf(p_name, p_tel, p_fax, d_type, target_info, note_text, is_urgent):
     # 1. 【至急】表示
     if is_urgent:
         p.setFont(FONT_NAME, 16)
-        p.drawString(40, height - 50, "【至急配達希望】")
+        p.drawString(40, height - 40, "【至急配達希望】")
     
-    # 2. タイトル
+    # 2. タイトル（位置を少し上げました）
     p.setFont(FONT_NAME, 18)
-    p.drawCentredString(width/2, height - 80, "処 方 箋 送 付 状")
+    p.drawCentredString(width/2, height - 70, "処 方 箋 送 付 状")
     
     p.setStrokeColorRGB(0.85, 0.85, 0.85)
     p.setLineWidth(0.5)
     
-    # 3. 送信先情報
-    y = height - 120
+    # 3. 送信先情報（行間を詰めて凝縮）
+    y = height - 105
     p.setFont(FONT_NAME, 9)
     p.drawString(40, y, f"送信日: {datetime.now().strftime('%Y.%m.%d')}")
     p.setFont(FONT_NAME, 14)
-    p.drawString(40, y - 30, f"{p_name}  御中")
+    p.drawString(40, y - 25, f"{p_name}  御中")
     p.setFont(FONT_NAME, 9)
-    p.drawString(40, y - 50, f"TEL: {p_tel}  /  FAX: {p_fax}")
+    p.drawString(40, y - 42, f"TEL: {p_tel}  /  FAX: {p_fax}")
     
-    p.line(40, y - 65, width - 40, y - 65) 
+    p.line(40, y - 55, width - 40, y - 55) 
     
-    # 4. 内容セクション（重なり防止で間隔を拡張）
-    y -= 105 
+    # 4. 内容セクション
+    y -= 85 
     p.setFont(FONT_NAME, 11)
     p.drawString(40, y, f"受け取り方法： {d_type}")
     
-    y -= 40
+    y -= 30 # 行間を引き締め
     p.setFont(FONT_NAME, 9)
     p.drawString(40, y, "いつも大変お世話になっております。")
-    p.drawString(40, y - 14, "以下の通り処方箋を送付いたしますので、ご対応のほど宜しくお願い申し上げます。")
+    p.drawString(40, y - 13, "以下の通り処方箋を送付いたしますので、ご対応のほど宜しくお願い申し上げます。")
     
     # 5. 施設・患者名セクション
-    y -= 70 
+    y -= 55 
     p.setFont(FONT_NAME, 8)
-    p.drawString(40, y + 10, "施設・患者名など")
+    p.drawString(40, y + 8, "施設・患者名など")
     p.setFont(FONT_NAME, 12)
-    p.drawString(50, y - 10, target_info if target_info else "---")
+    p.drawString(50, y - 8, target_info if target_info else "---")
     
     # 6. 備考セクション
-    y -= 70 
+    y -= 55 
     p.setFont(FONT_NAME, 8)
-    p.drawString(40, y + 10, "備考")
-    text_obj = p.beginText(50, y - 10)
+    p.drawString(40, y + 8, "備考")
+    text_obj = p.beginText(50, y - 8)
     text_obj.setFont(FONT_NAME, 10)
     text_obj.setLeading(14)
     for line in note_text.split("\n"):
@@ -94,6 +94,7 @@ def create_pdf(p_name, p_tel, p_fax, d_type, target_info, note_text, is_urgent):
     if not os.path.exists(logo_path): logo_path = "陽だまりロゴ.jpg"
         
     if os.path.exists(logo_path):
+        # ユーザー指定の完璧な座標：300, height - 715
         p.drawImage(logo_path, 300, height - 715, width=70, preserveAspectRatio=True, mask='auto')
     
     p.showPage()
@@ -104,24 +105,22 @@ def create_pdf(p_name, p_tel, p_fax, d_type, target_info, note_text, is_urgent):
 # --- 3. アプリ画面 ---
 st.set_page_config(page_title="Hidamari Clinic FAX", layout="centered")
 
-# 発行ボタンを青く大きくするCSS
 st.markdown("""
     <style>
     .stApp { background-color: #ffffff; }
     .stDownloadButton > button {
         background-color: #0071e3 !important;
         color: white !important;
-        font-size: 1.1rem !important;
+        font-size: 1.15rem !important;
         font-weight: bold !important;
         height: 3.8em !important;
         border-radius: 12px !important;
         border: none !important;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
     }
     </style>
     """, unsafe_allow_html=True)
 
-# 画面トップのロゴ表示
 logo_top = "logo.png"
 if not os.path.exists(logo_top): logo_top = "陽だまりロゴ.jpg"
 if os.path.exists(logo_top): st.image(logo_top, width=120)
@@ -144,7 +143,6 @@ with col_b:
 
 target_info = st.text_input("🏢 施設名・患者名など", placeholder="例：シニアハウス松原 松原潔様")
 
-# 備考
 if 'note_input' not in st.session_state: st.session_state.note_input = ""
 notes = st.text_area("✍️ 備考", value=st.session_state.note_input, height=120)
 st.session_state.note_input = notes
@@ -160,7 +158,6 @@ with st.expander("📋 定型文を利用する"):
 
 st.divider()
 
-# PDF発行（備考欄への自動挿入なし）
 pdf_data = create_pdf(pharmacy_name, row['TEL番号'], row['FAX番号'], delivery_type, target_info, st.session_state.note_input, is_urgent)
 
 st.download_button(
