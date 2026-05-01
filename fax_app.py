@@ -46,13 +46,9 @@ def create_pdf(p_name, p_tel, p_fax, d_type, target_info, note_text, is_urgent):
     p.drawString(40, y, f"送信日: {datetime.now().strftime('%Y.%m.%d')}")
     p.setFont(FONT_NAME, 14)
     p.drawString(40, y - 25, f"{p_name}  御中")
-    
-    # TEL/FAXの表示判定
     p.setFont(FONT_NAME, 9)
-    contact_info = []
-    if p_tel: contact_info.append(f"TEL: {p_tel}")
-    if p_fax: contact_info.append(f"FAX: {p_fax}")
-    p.drawString(40, y - 42, "  /  ".join(contact_info))
+    # 番号が空でもレイアウトが崩れないように調整
+    p.drawString(40, y - 42, f"TEL: {p_tel if p_tel else ''}  /  FAX: {p_fax if p_fax else ''}")
     
     p.line(40, y - 55, width - 40, y - 55) 
     
@@ -60,7 +56,7 @@ def create_pdf(p_name, p_tel, p_fax, d_type, target_info, note_text, is_urgent):
     p.setFont(FONT_NAME, 11)
     p.drawString(40, y, f"受け取り方法： {d_type}")
     
-    y -= 30 
+    y -= 30
     p.setFont(FONT_NAME, 9)
     p.drawString(40, y, "いつも大変お世話になっております。")
     p.drawString(40, y - 13, "以下の通り処方箋を送付いたしますので、ご対応のほど宜しくお願い申し上げます。")
@@ -97,70 +93,84 @@ def create_pdf(p_name, p_tel, p_fax, d_type, target_info, note_text, is_urgent):
     buffer.seek(0)
     return buffer
 
-# --- 3. アプリ画面 ---
-st.set_page_config(page_title="Hidamari Clinic FAX", layout="centered")
+# --- 3. アプリ画面設定 ---
+st.set_page_config(page_title="処方箋送付状作成BOT", layout="centered")
 
 st.markdown("""
     <style>
-    .stApp { background-color: #ffffff; }
+    html, body, [data-testid="stAppViewContainer"] { background-color: white !important; color: #1d1d1f !important; }
+    header[data-testid="stHeader"] { background-color: white !important; }
+    input, select, textarea, label, div, p { color: #1d1d1f !important; }
     .stDownloadButton > button {
-        background-color: #0071e3 !important;
-        color: white !important;
-        font-size: 1.15rem !important;
-        font-weight: bold !important;
-        height: 3.8em !important;
-        border-radius: 12px !important;
-        border: none !important;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        background-color: #0071e3 !important; color: white !important;
+        font-size: 1.4rem !important; font-weight: bold !important;
+        height: 2.8em !important; border-radius: 12px !important; border: none !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1); width: 100%;
+    }
+    .stTextInput input, .stTextArea textarea, [data-baseweb="select"] {
+        background-color: #f5f5f7 !important; border-radius: 10px !important;
     }
     </style>
     """, unsafe_allow_html=True)
+
+# Session State初期化
+if 'target_info' not in st.session_state: st.session_state.target_info = ""
+if 'note_input' not in st.session_state: st.session_state.note_input = ""
 
 logo_top = "logo.png"
 if not os.path.exists(logo_top): logo_top = "陽だまりロゴ.jpg"
 if os.path.exists(logo_top): st.image(logo_top, width=120)
 
-st.title("処方箋送付状の作成")
+st.title("処方箋送付状作成BOT")
 st.divider()
 
-# 入力モードの選択
-input_mode = st.segmented_control("入力方法", ["リストから選択", "新規（手入力）"], default="リストから選択")
+input_mode = st.segmented_control("作成モード", ["リストから選択", "手動入力"], default="リストから選択")
 
+pharmacy_name = ""
+tel_number = ""
+fax_number = ""
+
+# --- 薬局選択セクション ---
 if input_mode == "リストから選択":
     df_pharmacy = load_data()
     sort_order = st.segmented_control("並び順", ["リスト順", "あいうえお順"], default="リスト順")
     df_display = df_pharmacy.sort_values("ふりがな") if sort_order == "あいうえお順" else df_pharmacy
+
+    search_list = [f"{row['薬局名']} ({row['ふりがな']})" for _, row in df_display.iterrows()]
     
-    pharmacy_name = st.selectbox("🏥 薬局を選択", df_display["薬局名"].tolist())
-    row = df_display[df_display["薬局名"] == pharmacy_name].iloc[0]
-    p_tel = row['TEL番号']
-    p_fax = row['FAX番号']
+    pharmacy_selection = st.selectbox(
+        "🏥 薬局名を選択", 
+        search_list,
+        index=None,
+        placeholder="薬局名を入力...",
+        format_func=lambda x: x.split(" (")[0], 
+        key="pharmacy_selector"
+    )
+    
+    if pharmacy_selection:
+        pharmacy_name = pharmacy_selection.split(" (")[0]
+        row = df_display[df_display["薬局名"] == pharmacy_name].iloc[0]
+        tel_number = row['TEL番号']
+        fax_number = row['FAX番号']
+        st.markdown(f"**📞 TEL:** `{tel_number}`　/　**📠 FAX:** `{fax_number}`")
+
 else:
-    # --- 手入力モード ---
-    pharmacy_name = st.text_input("🏥 薬局名", placeholder="例：ひだまり薬局")
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        use_tel = st.checkbox("TELを入力する")
-        p_tel = st.text_input("📞 TEL番号", disabled=not use_tel) if use_tel else ""
-    with col2:
-        use_fax = st.checkbox("FAXを入力する")
-        p_fax = st.text_input("📠 FAX番号", disabled=not use_fax) if use_fax else ""
+    st.info("薬局情報を手入力してください")
+    pharmacy_name = st.text_input("🏥 薬局名", key="manual_p_name")
+    col_tel, col_fax = st.columns(2)
+    tel_number = col_tel.text_input("📞 TEL番号", key="manual_tel")
+    fax_number = col_fax.text_input("📠 FAX番号", key="manual_fax")
 
-st.divider()
-
+# --- 共通入力セクション ---
+st.write("")
 col_a, col_b = st.columns([2, 1])
 with col_a:
-    delivery_type = st.radio("🚚 受け取り方法", ["配達", "薬局で受け取り"], horizontal=True)
+    delivery_type = st.radio("🚚 受け取り方法", ["配達", "薬局で受け取り"], horizontal=True, key="delivery_radio")
 with col_b:
-    is_urgent = st.toggle("🚨 至急モード", value=False)
+    is_urgent = st.toggle("🚨 至急モード", value=False, key="urgent_toggle")
 
-# 患者名（プレースホルダー削除）
-target_info = st.text_input("🏢 施設名・患者名など")
-
-if 'note_input' not in st.session_state: st.session_state.note_input = ""
-notes = st.text_area("✍️ 備考", value=st.session_state.note_input, height=120)
-st.session_state.note_input = notes
+target_info = st.text_input("🏢 施設名・患者名など", key="target_info", placeholder="")
+notes = st.text_area("✍️ 備考", height=120, key="note_input")
 
 with st.expander("📋 定型文を利用する"):
     t1, t2 = st.columns(2)
@@ -173,15 +183,15 @@ with st.expander("📋 定型文を利用する"):
 
 st.divider()
 
+# --- PDF発行ボタン（★薬局名さえあれば表示） ---
 if pharmacy_name:
-    pdf_data = create_pdf(pharmacy_name, p_tel, p_fax, delivery_type, target_info, st.session_state.note_input, is_urgent)
-
+    pdf_data = create_pdf(pharmacy_name, tel_number, fax_number, delivery_type, target_info, st.session_state.note_input, is_urgent)
     st.download_button(
-        label=f"🖨️ {pharmacy_name} 宛のPDFを発行",
+        label="PDFを発行",
         data=pdf_data,
         file_name=f"送付状_{pharmacy_name}.pdf",
         mime="application/pdf",
         use_container_width=True
     )
 else:
-    st.info("薬局名を入力または選択してください。")
+    st.warning("薬局名を入力または選択してください。")
