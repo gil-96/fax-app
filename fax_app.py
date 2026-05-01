@@ -24,7 +24,7 @@ def load_data():
             "TEL番号": ["000-000-0000"], "FAX番号": ["000-000-0000"]
         })
 
-# --- 2. PDF作成ロジック ---
+# --- 2. PDF作成ロジック（高密度レイアウト） ---
 def create_pdf(p_name, p_tel, p_fax, d_type, target_info, note_text, is_urgent):
     buffer = io.BytesIO()
     p = canvas.Canvas(buffer, pagesize=A5)
@@ -47,7 +47,6 @@ def create_pdf(p_name, p_tel, p_fax, d_type, target_info, note_text, is_urgent):
     p.setFont(FONT_NAME, 14)
     p.drawString(40, y - 25, f"{p_name}  御中")
     p.setFont(FONT_NAME, 9)
-    # 番号が空でもレイアウトが崩れないように調整
     p.drawString(40, y - 42, f"TEL: {p_tel if p_tel else ''}  /  FAX: {p_fax if p_fax else ''}")
     
     p.line(40, y - 55, width - 40, y - 55) 
@@ -93,9 +92,16 @@ def create_pdf(p_name, p_tel, p_fax, d_type, target_info, note_text, is_urgent):
     buffer.seek(0)
     return buffer
 
-# --- 3. アプリ画面設定 ---
+# --- 3. コールバック関数（エラー対策） ---
+def add_template(text):
+    """ボタンが押された時に備考欄に文字を追加する関数"""
+    if 'note_input' in st.session_state:
+        st.session_state.note_input += text
+
+# --- 4. アプリ画面設定 ---
 st.set_page_config(page_title="処方箋送付状作成BOT", layout="centered")
 
+# ライトモード固定 & 最新デザイン
 st.markdown("""
     <style>
     html, body, [data-testid="stAppViewContainer"] { background-color: white !important; color: #1d1d1f !important; }
@@ -113,8 +119,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# Session State初期化
-if 'target_info' not in st.session_state: st.session_state.target_info = ""
+# セッション状態の初期化
 if 'note_input' not in st.session_state: st.session_state.note_input = ""
 
 logo_top = "logo.png"
@@ -124,13 +129,14 @@ if os.path.exists(logo_top): st.image(logo_top, width=120)
 st.title("処方箋送付状作成BOT")
 st.divider()
 
+# モード選択
 input_mode = st.segmented_control("作成モード", ["リストから選択", "手動入力"], default="リストから選択")
 
 pharmacy_name = ""
 tel_number = ""
 fax_number = ""
 
-# --- 薬局選択セクション ---
+# --- 薬局選択 ---
 if input_mode == "リストから選択":
     df_pharmacy = load_data()
     sort_order = st.segmented_control("並び順", ["リスト順", "あいうえお順"], default="リスト順")
@@ -153,7 +159,6 @@ if input_mode == "リストから選択":
         tel_number = row['TEL番号']
         fax_number = row['FAX番号']
         st.markdown(f"**📞 TEL:** `{tel_number}`　/　**📠 FAX:** `{fax_number}`")
-
 else:
     st.info("薬局情報を手入力してください")
     pharmacy_name = st.text_input("🏥 薬局名", key="manual_p_name")
@@ -161,7 +166,7 @@ else:
     tel_number = col_tel.text_input("📞 TEL番号", key="manual_tel")
     fax_number = col_fax.text_input("📠 FAX番号", key="manual_fax")
 
-# --- 共通入力セクション ---
+# --- 共通入力セクション（常時表示） ---
 st.write("")
 col_a, col_b = st.columns([2, 1])
 with col_a:
@@ -170,20 +175,22 @@ with col_b:
     is_urgent = st.toggle("🚨 至急モード", value=False, key="urgent_toggle")
 
 target_info = st.text_input("🏢 施設名・患者名など", key="target_info", placeholder="")
+
+# 備考欄（Keyを指定）
 notes = st.text_area("✍️ 備考", height=120, key="note_input")
 
+# 定型文ボタン（コールバック方式に変更）
 with st.expander("📋 定型文を利用する"):
     t1, t2 = st.columns(2)
-    if t1.button("原本後日郵送 ＋", use_container_width=True):
-        st.session_state.note_input += "処方箋原本は後日郵送いたします。\n"
-        st.rerun()
-    if t2.button("連絡依頼 ＋", use_container_width=True):
-        st.session_state.note_input += "調剤できましたら、○○に連絡をお願い致します。\n"
-        st.rerun()
+    # on_click を使うことで、安全にデータを追加できます
+    t1.button("原本後日郵送 ＋", use_container_width=True, 
+              on_click=add_template, args=("処方箋原本は後日郵送いたします。\n",))
+    t2.button("連絡依頼 ＋", use_container_width=True, 
+              on_click=add_template, args=("調剤できましたら、○○に連絡をお願い致します。\n",))
 
 st.divider()
 
-# --- PDF発行ボタン（★薬局名さえあれば表示） ---
+# --- PDF発行ボタン（薬局名があればOK） ---
 if pharmacy_name:
     pdf_data = create_pdf(pharmacy_name, tel_number, fax_number, delivery_type, target_info, st.session_state.note_input, is_urgent)
     st.download_button(
@@ -194,4 +201,4 @@ if pharmacy_name:
         use_container_width=True
     )
 else:
-    st.warning("薬局名を入力または選択してください。")
+    st.warning("薬局名を入力または選択すると、PDFを発行できるようになります。")
