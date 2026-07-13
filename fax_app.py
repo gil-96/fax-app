@@ -92,16 +92,15 @@ def create_pdf(p_name, p_tel, p_fax, d_type, target_info, note_text, is_urgent):
     buffer.seek(0)
     return buffer
 
-# --- 3. コールバック関数（エラー対策） ---
+# --- 3. コールバック関数（安全にセッション状態を更新） ---
 def add_template(text):
-    """ボタンが押された時に備考欄に文字を追加する関数"""
+    """ボタンが押された時にセッション状態の文字列を追加する関数"""
     if 'note_input' in st.session_state:
         st.session_state.note_input += text
 
 # --- 4. アプリ画面設定 ---
 st.set_page_config(page_title="処方箋送付状作成BOT", layout="centered")
 
-# ライトモード固定 & 最新デザイン
 st.markdown("""
     <style>
     html, body, [data-testid="stAppViewContainer"] { background-color: white !important; color: #1d1d1f !important; }
@@ -120,7 +119,8 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # セッション状態の初期化
-if 'note_input' not in st.session_state: st.session_state.note_input = ""
+if 'note_input' not in st.session_state: 
+    st.session_state.note_input = ""
 
 logo_top = "logo.png"
 if not os.path.exists(logo_top): logo_top = "陽だまりロゴ.jpg"
@@ -158,7 +158,7 @@ if input_mode == "リストから選択":
         row = df_display[df_display["薬局名"] == pharmacy_name].iloc[0]
         tel_number = row['TEL番号']
         fax_number = row['FAX番号']
-        st.markdown(f"**📞 TEL:** `{tel_number}`　/　**📠 FAX:** `{fax_number}`")
+        st.markdown(f"**📞 TEL:** `{tel_number}` / **📠 FAX:** `{fax_number}`")
 else:
     st.info("薬局情報を手入力してください")
     pharmacy_name = st.text_input("🏥 薬局名", key="manual_p_name")
@@ -176,13 +176,12 @@ with col_b:
 
 target_info = st.text_input("🏢 施設名・患者名など", key="target_info", placeholder="")
 
-# 備考欄（Keyを指定）
+# 備考欄（直接セッション状態を同期）
 notes = st.text_area("✍️ 備考", height=120, key="note_input")
 
-# 定型文ボタン（コールバック方式に変更）
+# 定型文ボタン
 with st.expander("📋 定型文を利用する"):
     t1, t2 = st.columns(2)
-    # on_click を使うことで、安全にデータを追加できます
     t1.button("原本後日郵送 ＋", use_container_width=True, 
               on_click=add_template, args=("処方箋原本は後日郵送いたします。\n",))
     t2.button("連絡依頼 ＋", use_container_width=True, 
@@ -190,12 +189,12 @@ with st.expander("📋 定型文を利用する"):
 
 st.divider()
 
-# --- PDF発行ボタン（薬局名があればOK） ---
+# --- PDF発行ボタン ---
 if pharmacy_name:
     pdf_data = create_pdf(pharmacy_name, tel_number, fax_number, delivery_type, target_info, st.session_state.note_input, is_urgent)
     st.download_button(
         label="PDFを発行",
-        data=pdf_data,
+        data=pdf_data.getvalue(),  # 確実にバイト列として渡すよう修正
         file_name=f"送付状_{pharmacy_name}.pdf",
         mime="application/pdf",
         use_container_width=True
