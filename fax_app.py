@@ -117,8 +117,8 @@ st.set_page_config(page_title="処方箋送付状作成BOT", layout="centered")
 
 st.markdown("""
     <style>
-    html, body, [data-testid="stAppViewContainer"] { background-color: #f8f9fa !important; color: #1d1d1f !important; }
-    header[data-testid="stHeader"] { background-color: transparent !important; }
+    html, body, [data-testid="stAppViewContainer"] { background-color: #ffffff !important; color: #1d1d1f !important; }
+    header[data-testid="stHeader"] { background-color: #ffffff !important; }
     input, select, textarea, label, div, p { color: #1d1d1f !important; }
     .stDownloadButton > button {
         background-color: #0071e3 !important; color: white !important;
@@ -127,7 +127,48 @@ st.markdown("""
         box-shadow: 0 4px 12px rgba(0,0,0,0.1); width: 100%;
     }
     .stTextInput input, .stTextArea textarea, [data-baseweb="select"] {
-        background-color: #ffffff !important; border-radius: 10px !important;
+        background-color: #f5f5f7 !important; border-radius: 10px !important;
+    }
+    /* A5用紙プレビュー用スタイル */
+    .a5-paper {
+        background: #ffffff;
+        border: 1px solid #e0e0e0;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        border-radius: 8px;
+        padding: 30px;
+        margin-top: 15px;
+        font-family: "Hiragino Sans", "Meiryo", sans-serif;
+        color: #222222;
+    }
+    .urgent-tag {
+        color: #d93025;
+        font-weight: bold;
+        font-size: 1.1rem;
+        margin-bottom: 10px;
+    }
+    .paper-title {
+        text-align: center;
+        font-size: 1.5rem;
+        font-weight: bold;
+        letter-spacing: 4px;
+        margin-bottom: 20px;
+    }
+    .paper-line {
+        border-bottom: 1px solid #cccccc;
+        margin: 15px 0;
+    }
+    .paper-section {
+        margin-bottom: 15px;
+    }
+    .paper-label {
+        font-size: 0.8rem;
+        color: #666666;
+        margin-bottom: 3px;
+    }
+    .paper-content {
+        font-size: 1.05rem;
+        font-weight: 500;
+        white-space: pre-wrap;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -166,7 +207,6 @@ if input_mode == "リストから選択":
         "🏥 薬局名を選択", 
         search_list,
         index=None,
-        placeholder="薬局名を入力...",
         format_func=lambda x: x.split(" (")[0], 
         key="pharmacy_selector"
     )
@@ -192,7 +232,7 @@ with col_a:
 with col_b:
     is_urgent = st.toggle("🚨 至急モード", value=False, key="urgent_toggle")
 
-target_info = st.text_input("🏢 施設名・患者名など", key="target_info", placeholder="例: 陽だまり太郎 様 / 陽だまりの家")
+target_info = st.text_input("🏢 施設名・患者名など", key="target_info")
 
 # 備考欄（session_stateと直接連携）
 note_text = st.text_area("✍️ 備考", height=100, key="note_input")
@@ -207,7 +247,7 @@ with st.expander("📋 定型文を利用する", expanded=False):
 
 st.divider()
 
-# --- PDFの生成 & 即時プレビュー表示 ---
+# --- PDFの生成 & リアルタイム紙面プレビュー表示 ---
 if pharmacy_name or input_mode == "手動入力":
     pdf_buffer = create_pdf(
         pharmacy_name, 
@@ -230,10 +270,42 @@ if pharmacy_name or input_mode == "手動入力":
         use_container_width=True
     )
     
-    # 2. リアルタイムPDFプレビュー表示
-    st.markdown("### 👁️ PDFプレビュー")
-    base64_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
-    pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="500" type="application/pdf" style="border-radius: 10px; border: 1px solid #ddd;"></iframe>'
-    st.markdown(pdf_display, unsafe_allow_html=True)
+    # 2. Chromeのブロックを絶対回避するHTML/CSS紙面プレビュー
+    st.markdown("### 👁️ リアルタイムプレビュー")
+    
+    urgent_html = '<div class="urgent-tag">【至急配達希望】</div>' if is_urgent else ''
+    target_disp = target_info if target_info else "---"
+    note_disp = note_text if note_text else "---"
+    today_str = datetime.now().strftime('%Y.%m.%d')
+    p_name_disp = f"{pharmacy_name} 御中" if pharmacy_name else "御中"
+    
+    preview_html = f"""
+    <div class="a5-paper">
+        {urgent_html}
+        <div class="paper-title">処 方 箋 送 付 状</div>
+        <div style="font-size: 0.85rem; color: #555;">送信日: {today_str}</div>
+        <div style="font-size: 1.2rem; font-weight: bold; margin-top: 5px;">{p_name_disp}</div>
+        <div style="font-size: 0.85rem; color: #555;">TEL: {tel_number} / FAX: {fax_number}</div>
+        <div class="paper-line"></div>
+        <div style="font-size: 1rem; margin-bottom: 12px;"><strong>受け取り方法：</strong> {delivery_type}</div>
+        <div style="font-size: 0.85rem; line-height: 1.5; color: #333;">
+            いつも大変お世話になっております。<br>
+            以下の通り処方箋を送付いたしますので、ご対応のほど宜しくお願い申し上げます。
+        </div>
+        <div class="paper-line"></div>
+        <div class="paper-section">
+            <div class="paper-label">施設・患者名など</div>
+            <div class="paper-content">{target_disp}</div>
+        </div>
+        <div class="paper-section">
+            <div class="paper-label">備考</div>
+            <div class="paper-content">{note_disp}</div>
+        </div>
+        <div class="paper-line"></div>
+        <div style="font-size: 0.95rem; font-weight: bold;">陽だまり診療所</div>
+        <div style="font-size: 0.8rem; color: #555;">TEL: 0178-32-7358 / FAX: 0178-32-7359</div>
+    </div>
+    """
+    st.markdown(preview_html, unsafe_allow_html=True)
 else:
     st.warning("👈 薬局名を選択するか手入力すると、PDFの発行とプレビューが表示されます。")
