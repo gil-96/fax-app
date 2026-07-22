@@ -7,8 +7,22 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 import io
 import os
+import base64
 
 FONT_NAME = "HeiseiMin-W3" 
+
+def get_logo_base64():
+    """ロゴ画像をbase64エンコードして取得（プレビュー用）"""
+    logo_path = "logo.png"
+    if not os.path.exists(logo_path):
+        logo_path = "陽だまりロゴ.jpg"
+    if os.path.exists(logo_path):
+        with open(logo_path, "rb") as f:
+            encoded = base64.b64encode(f.read()).decode("utf-8")
+            ext = os.path.splitext(logo_path)[1].lower()
+            mime = "image/png" if ext == ".png" else "image/jpeg"
+            return f"data:{mime};base64,{encoded}"
+    return None
 
 def setup_font():
     """ReportLabに日本語フォントを登録"""
@@ -124,7 +138,7 @@ st.markdown("""
     .stTextInput input, .stTextArea textarea, [data-baseweb="select"] {
         background-color: #f5f5f7 !important; border-radius: 8px !important;
     }
-    .block-container { padding-top: 1.5rem !important; padding-bottom: 2rem !important; }
+    .block-container { padding-top: 2rem !important; padding-bottom: 2rem !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -132,7 +146,8 @@ st.markdown("""
 if 'note_input' not in st.session_state: 
     st.session_state['note_input'] = ""
 
-header_col1, header_col2 = st.columns([1.5, 10])
+# 上部ヘッダー（カラム幅を広げ垂直中央揃えでロゴの上部見切れを修正）
+header_col1, header_col2 = st.columns([2.5, 9.5], vertical_alignment="center")
 with header_col1:
     logo_top = "logo.png"
     if not os.path.exists(logo_top): 
@@ -241,15 +256,18 @@ with col_preview:
     target_disp = target_info if target_info else "---"
     note_disp = note_text if note_text else "---"
     urgent_header = '<div style="color: #d93025; font-weight: bold; font-size: 15px; margin-bottom: 8px;">【至急配達希望】</div>' if is_urgent else ''
+    
+    logo_b64 = get_logo_base64()
+    logo_html = f'<img src="{logo_b64}" style="height: 38px; width: auto; object-fit: contain;">' if logo_b64 else ''
 
     preview_html = f"""
-    <div style="background-color: #f4f5f7; padding: 15px; display: flex; justify-content: center; align-items: flex-start; min-height: 680px; border-radius: 8px;">
+    <div style="background-color: #f4f5f7; padding: 15px; display: flex; justify-content: center; align-items: flex-start; min-height: 720px; border-radius: 8px;">
         <div id="fax-content" style="
             background-color: white;
             padding: 12mm 14mm 12mm 14mm;
             width: 100%;
             max-width: 140mm;
-            min-height: 190mm;
+            min-height: 185mm;
             box-shadow: 0 4px 15px rgba(0,0,0,0.08);
             border-radius: 4px;
             font-family: 'Helvetica Neue', Arial, 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif;
@@ -306,13 +324,16 @@ with col_preview:
 
             <div style="border-top: 1px solid #ddd; margin-bottom: 10px;"></div>
 
-            <!-- 送信元 -->
-            <div style="font-size: 12px; color: #333;">
-                <div style="font-size: 14px; font-weight: bold; color: #000;">陽だまり診療所</div>
-                <div style="font-size: 11px; color: #555;">TEL: 0178-32-7358 &nbsp;/&nbsp; FAX: 0178-32-7359</div>
+            <!-- 送信元 & ロゴ -->
+            <div style="display: flex; justify-content: space-between; align-items: flex-end; font-size: 12px; color: #333;">
+                <div>
+                    <div style="font-size: 14px; font-weight: bold; color: #000;">陽だまり診療所</div>
+                    <div style="font-size: 11px; color: #555;">TEL: 0178-32-7358 &nbsp;/&nbsp; FAX: 0178-32-7359</div>
+                </div>
+                {logo_html}
             </div>
         </div>
     </div>
     """
     
-    st.components.v1.html(preview_html, height=720, scrolling=True)
+    st.components.v1.html(preview_html, height=760, scrolling=True)
