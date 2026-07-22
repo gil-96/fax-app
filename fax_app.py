@@ -256,7 +256,7 @@ with col_preview:
     p_name_disp = f"{pharmacy_name} 御中" if pharmacy_name else "御中"
     target_disp = target_info if target_info else "---"
     note_disp = note_text if note_text else "---"
-    urgent_header = '<div style="color: #d93025; font-weight: bold; font-size: 15px; margin-bottom: 8px;">【至急配達希望】</div>' if is_urgent else ''
+    urgent_header = '<div style="color: #000; font-weight: bold; font-size: 15px; margin-bottom: 8px;">【至急配達希望】</div>' if is_urgent else ''
     
     logo_b64 = get_logo_base64()
     logo_html = f'<img src="{logo_b64}" style="height: 38px; width: auto; object-fit: contain;">' if logo_b64 else ''
