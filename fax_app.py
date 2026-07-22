@@ -7,15 +7,18 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 import io
 import os
+import base64
 
 # --- 1. フォント・環境設定 ---
 FONT_NAME = "HeiseiMin-W3" 
 
 def setup_font():
+    """ReportLabに日本語フォントを登録"""
     pdfmetrics.registerFont(UnicodeCIDFont(FONT_NAME))
 
 @st.cache_data
 def load_data():
+    """薬局リストの読み込み（ファイルがない場合はサンプルデータ）"""
     try:
         return pd.read_csv("pharmacy_list.csv")
     except:
@@ -26,18 +29,22 @@ def load_data():
 
 # --- 2. PDF作成ロジック（高密度レイアウト） ---
 def create_pdf(p_name, p_tel, p_fax, d_type, target_info, note_text, is_urgent):
+    """入力情報に基づいてA5サイズの処方箋送付状PDFを生成"""
     buffer = io.BytesIO()
     p = canvas.Canvas(buffer, pagesize=A5)
     width, height = A5
     setup_font()
     
+    # 至急フラグの描画
     if is_urgent:
         p.setFont(FONT_NAME, 16)
         p.drawString(40, height - 40, "【至急配達希望】")
     
+    # タイトル
     p.setFont(FONT_NAME, 18)
     p.drawCentredString(width/2, height - 70, "処 方 箋 送 付 状")
     
+    # 区切り線と宛先情報
     p.setStrokeColorRGB(0.85, 0.85, 0.85)
     p.setLineWidth(0.5)
     
@@ -45,12 +52,13 @@ def create_pdf(p_name, p_tel, p_fax, d_type, target_info, note_text, is_urgent):
     p.setFont(FONT_NAME, 9)
     p.drawString(40, y, f"送信日: {datetime.now().strftime('%Y.%m.%d')}")
     p.setFont(FONT_NAME, 14)
-    p.drawString(40, y - 25, f"{p_name}  御中")
+    p.drawString(40, y - 25, f"{p_name} 御中" if p_name else "御中")
     p.setFont(FONT_NAME, 9)
-    p.drawString(40, y - 42, f"TEL: {p_tel if p_tel else ''}  /  FAX: {p_fax if p_fax else ''}")
+    p.drawString(40, y - 42, f"TEL: {p_tel if p_tel else ''} / FAX: {p_fax if p_fax else ''}")
     
     p.line(40, y - 55, width - 40, y - 55) 
     
+    # 送付目的・受け取り方法
     y -= 85 
     p.setFont(FONT_NAME, 11)
     p.drawString(40, y, f"受け取り方法： {d_type}")
@@ -60,30 +68,36 @@ def create_pdf(p_name, p_tel, p_fax, d_type, target_info, note_text, is_urgent):
     p.drawString(40, y, "いつも大変お世話になっております。")
     p.drawString(40, y - 13, "以下の通り処方箋を送付いたしますので、ご対応のほど宜しくお願い申し上げます。")
     
+    # 施設・患者名情報
     y -= 55 
     p.setFont(FONT_NAME, 8)
     p.drawString(40, y + 8, "施設・患者名など")
     p.setFont(FONT_NAME, 12)
     p.drawString(50, y - 8, target_info if target_info else "---")
     
+    # 備考欄
     y -= 55 
     p.setFont(FONT_NAME, 8)
     p.drawString(40, y + 8, "備考")
     text_obj = p.beginText(50, y - 8)
     text_obj.setFont(FONT_NAME, 10)
     text_obj.setLeading(14)
-    for line in note_text.split("\n"):
-        text_obj.textLine(line)
+    if note_text:
+        for line in note_text.split("\n"):
+            text_obj.textLine(line)
     p.drawText(text_obj)
     
+    # 送信元情報（フッター）
     p.line(40, 90, width - 40, 90)
     p.setFont(FONT_NAME, 11)
     p.drawString(40, 65, "陽だまり診療所")
     p.setFont(FONT_NAME, 8)
-    p.drawString(40, 50, "TEL: 0178-32-7358  /  FAX: 0178-32-7359")
+    p.drawString(40, 50, "TEL: 0178-32-7358 / FAX: 0178-32-7359")
     
+    # ロゴ画像の挿入（存在する場合）
     logo_path = "logo.png"
-    if not os.path.exists(logo_path): logo_path = "陽だまりロゴ.jpg"
+    if not os.path.exists(logo_path): 
+        logo_path = "陽だまりロゴ.jpg"
     if os.path.exists(logo_path):
         p.drawImage(logo_path, 300, height - 715, width=70, preserveAspectRatio=True, mask='auto')
     
@@ -92,41 +106,45 @@ def create_pdf(p_name, p_tel, p_fax, d_type, target_info, note_text, is_urgent):
     buffer.seek(0)
     return buffer
 
-# --- 3. コールバック関数（安全にセッション状態を更新） ---
-def add_template(text):
-    """ボタンが押された時にセッション状態の文字列を追加する関数"""
+# --- 3. コールバック関数（安全にテキストを追加） ---
+def add_template_text(text_to_add):
+    """定型文ボタンが押された際に安全にテキストエリアへ追加するコールバック"""
     if 'note_input' in st.session_state:
-        st.session_state.note_input += text
+        st.session_state['note_input'] = (st.session_state['note_input'] or "") + text_to_add
 
 # --- 4. アプリ画面設定 ---
 st.set_page_config(page_title="処方箋送付状作成BOT", layout="centered")
 
 st.markdown("""
     <style>
-    html, body, [data-testid="stAppViewContainer"] { background-color: white !important; color: #1d1d1f !important; }
-    header[data-testid="stHeader"] { background-color: white !important; }
+    html, body, [data-testid="stAppViewContainer"] { background-color: #f8f9fa !important; color: #1d1d1f !important; }
+    header[data-testid="stHeader"] { background-color: transparent !important; }
     input, select, textarea, label, div, p { color: #1d1d1f !important; }
     .stDownloadButton > button {
         background-color: #0071e3 !important; color: white !important;
-        font-size: 1.4rem !important; font-weight: bold !important;
+        font-size: 1.2rem !important; font-weight: bold !important;
         height: 2.8em !important; border-radius: 12px !important; border: none !important;
         box-shadow: 0 4px 12px rgba(0,0,0,0.1); width: 100%;
     }
     .stTextInput input, .stTextArea textarea, [data-baseweb="select"] {
-        background-color: #f5f5f7 !important; border-radius: 10px !important;
+        background-color: #ffffff !important; border-radius: 10px !important;
     }
     </style>
     """, unsafe_allow_html=True)
 
 # セッション状態の初期化
 if 'note_input' not in st.session_state: 
-    st.session_state.note_input = ""
+    st.session_state['note_input'] = ""
 
+# ロゴの表示
 logo_top = "logo.png"
-if not os.path.exists(logo_top): logo_top = "陽だまりロゴ.jpg"
-if os.path.exists(logo_top): st.image(logo_top, width=120)
+if not os.path.exists(logo_top): 
+    logo_top = "陽だまりロゴ.jpg"
+if os.path.exists(logo_top): 
+    st.image(logo_top, width=120)
 
-st.title("処方箋送付状作成BOT")
+st.title("📄 処方箋送付状作成BOT")
+st.caption("入力した情報はリアルタイムで下部のプレビューに反映されます。")
 st.divider()
 
 # モード選択
@@ -156,8 +174,8 @@ if input_mode == "リストから選択":
     if pharmacy_selection:
         pharmacy_name = pharmacy_selection.split(" (")[0]
         row = df_display[df_display["薬局名"] == pharmacy_name].iloc[0]
-        tel_number = row['TEL番号']
-        fax_number = row['FAX番号']
+        tel_number = str(row['TEL番号'])
+        fax_number = str(row['FAX番号'])
         st.markdown(f"**📞 TEL:** `{tel_number}` / **📠 FAX:** `{fax_number}`")
 else:
     st.info("薬局情報を手入力してください")
@@ -166,7 +184,7 @@ else:
     tel_number = col_tel.text_input("📞 TEL番号", key="manual_tel")
     fax_number = col_fax.text_input("📠 FAX番号", key="manual_fax")
 
-# --- 共通入力セクション（常時表示） ---
+# --- 共通入力セクション ---
 st.write("")
 col_a, col_b = st.columns([2, 1])
 with col_a:
@@ -174,30 +192,48 @@ with col_a:
 with col_b:
     is_urgent = st.toggle("🚨 至急モード", value=False, key="urgent_toggle")
 
-target_info = st.text_input("🏢 施設名・患者名など", key="target_info", placeholder="")
+target_info = st.text_input("🏢 施設名・患者名など", key="target_info", placeholder="例: 陽だまり太郎 様 / 陽だまりの家")
 
-# 備考欄（直接セッション状態を同期）
-notes = st.text_area("✍️ 備考", height=120, key="note_input")
+# 備考欄（session_stateと直接連携）
+note_text = st.text_area("✍️ 備考", height=100, key="note_input")
 
-# 定型文ボタン
-with st.expander("📋 定型文を利用する"):
+# 定型文ボタン（on_clickで安全に追加）
+with st.expander("📋 定型文を利用する", expanded=False):
     t1, t2 = st.columns(2)
     t1.button("原本後日郵送 ＋", use_container_width=True, 
-              on_click=add_template, args=("処方箋原本は後日郵送いたします。\n",))
+              on_click=add_template_text, args=("処方箋原本は後日郵送いたします。\n",))
     t2.button("連絡依頼 ＋", use_container_width=True, 
-              on_click=add_template, args=("調剤できましたら、○○に連絡をお願い致します。\n",))
+              on_click=add_template_text, args=("調剤できましたら、ご連絡をお願い致します。\n",))
 
 st.divider()
 
-# --- PDF発行ボタン ---
-if pharmacy_name:
-    pdf_data = create_pdf(pharmacy_name, tel_number, fax_number, delivery_type, target_info, st.session_state.note_input, is_urgent)
+# --- PDFの生成 & 即時プレビュー表示 ---
+if pharmacy_name or input_mode == "手動入力":
+    pdf_buffer = create_pdf(
+        pharmacy_name, 
+        tel_number, 
+        fax_number, 
+        delivery_type, 
+        target_info, 
+        note_text, 
+        is_urgent
+    )
+    
+    pdf_bytes = pdf_buffer.getvalue()
+    
+    # 1. ダウンロードボタン
     st.download_button(
-        label="PDFを発行",
-        data=pdf_data.getvalue(),  # 確実にバイト列として渡すよう修正
-        file_name=f"送付状_{pharmacy_name}.pdf",
+        label="📥 送付状PDFをダウンロード",
+        data=pdf_bytes,
+        file_name=f"送付状_{pharmacy_name if pharmacy_name else '未定'}.pdf",
         mime="application/pdf",
         use_container_width=True
     )
+    
+    # 2. リアルタイムPDFプレビュー表示
+    st.markdown("### 👁️ PDFプレビュー")
+    base64_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
+    pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="500" type="application/pdf" style="border-radius: 10px; border: 1px solid #ddd;"></iframe>'
+    st.markdown(pdf_display, unsafe_allow_html=True)
 else:
-    st.warning("薬局名を入力または選択すると、PDFを発行できるようになります。")
+    st.warning("👈 薬局名を選択するか手入力すると、PDFの発行とプレビューが表示されます。")
