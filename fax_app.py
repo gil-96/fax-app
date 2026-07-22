@@ -105,12 +105,12 @@ def create_pdf(p_name, p_tel, p_fax, d_type, target_info, note_text, is_urgent):
     p.setFont(FONT_NAME, 8)
     p.drawString(40, 50, "TEL: 0178-32-7358 / FAX: 0178-32-7359")
     
-    # ロゴ画像の挿入（存在する場合）
+    # ロゴ画像の挿入（右下フッターの位置・サイズを最適化）
     logo_path = "logo.png"
     if not os.path.exists(logo_path): 
         logo_path = "陽だまりロゴ.jpg"
     if os.path.exists(logo_path):
-        p.drawImage(logo_path, 310, 45, width=70, preserveAspectRatio=True, mask='auto')
+        p.drawImage(logo_path, 295, 50, width=85, height=30, preserveAspectRatio=True, mask='auto')
     
     p.showPage()
     p.save()
