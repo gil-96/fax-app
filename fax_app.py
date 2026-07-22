@@ -7,7 +7,6 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 import io
 import os
-import base64
 
 # --- 1. フォント・環境設定 ---
 FONT_NAME = "HeiseiMin-W3" 
@@ -27,7 +26,6 @@ def load_data():
             "TEL番号": ["000-000-0000"], "FAX番号": ["000-000-0000"]
         })
 
-# --- 2. PDF作成ロジック（高密度レイアウト） ---
 def create_pdf(p_name, p_tel, p_fax, d_type, target_info, note_text, is_urgent):
     """入力情報に基づいてA5サイズの処方箋送付状PDFを生成"""
     buffer = io.BytesIO()
@@ -106,7 +104,6 @@ def create_pdf(p_name, p_tel, p_fax, d_type, target_info, note_text, is_urgent):
     buffer.seek(0)
     return buffer
 
-# --- 3. コールバック関数（安全にテキストを追加） ---
 def add_template_text(text_to_add):
     """定型文ボタンが押された際に安全にテキストエリアへ追加するコールバック"""
     if 'note_input' in st.session_state:
@@ -128,47 +125,6 @@ st.markdown("""
     }
     .stTextInput input, .stTextArea textarea, [data-baseweb="select"] {
         background-color: #f5f5f7 !important; border-radius: 10px !important;
-    }
-    /* A5用紙プレビュー用スタイル */
-    .a5-paper {
-        background: #ffffff;
-        border: 1px solid #e0e0e0;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.08);
-        border-radius: 8px;
-        padding: 30px;
-        margin-top: 15px;
-        font-family: "Hiragino Sans", "Meiryo", sans-serif;
-        color: #222222;
-    }
-    .urgent-tag {
-        color: #d93025;
-        font-weight: bold;
-        font-size: 1.1rem;
-        margin-bottom: 10px;
-    }
-    .paper-title {
-        text-align: center;
-        font-size: 1.5rem;
-        font-weight: bold;
-        letter-spacing: 4px;
-        margin-bottom: 20px;
-    }
-    .paper-line {
-        border-bottom: 1px solid #cccccc;
-        margin: 15px 0;
-    }
-    .paper-section {
-        margin-bottom: 15px;
-    }
-    .paper-label {
-        font-size: 0.8rem;
-        color: #666666;
-        margin-bottom: 3px;
-    }
-    .paper-content {
-        font-size: 1.05rem;
-        font-weight: 500;
-        white-space: pre-wrap;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -204,9 +160,10 @@ if input_mode == "リストから選択":
     search_list = [f"{row['薬局名']} ({row['ふりがな']})" for _, row in df_display.iterrows()]
     
     pharmacy_selection = st.selectbox(
-        "🏥 薬局名を選択", 
+        "🏥 薬局名を選択もしくは入力", 
         search_list,
         index=None,
+        placeholder="薬局名",
         format_func=lambda x: x.split(" (")[0], 
         key="pharmacy_selector"
     )
@@ -219,7 +176,7 @@ if input_mode == "リストから選択":
         st.markdown(f"**📞 TEL:** `{tel_number}` / **📠 FAX:** `{fax_number}`")
 else:
     st.info("薬局情報を手入力してください")
-    pharmacy_name = st.text_input("🏥 薬局名", key="manual_p_name")
+    pharmacy_name = st.text_input("🏥 薬局名を選択もしくは入力", placeholder="薬局名", key="manual_p_name")
     col_tel, col_fax = st.columns(2)
     tel_number = col_tel.text_input("📞 TEL番号", key="manual_tel")
     fax_number = col_fax.text_input("📠 FAX番号", key="manual_fax")
@@ -237,7 +194,7 @@ target_info = st.text_input("🏢 施設名・患者名など", key="target_info
 # 備考欄（session_stateと直接連携）
 note_text = st.text_area("✍️ 備考", height=100, key="note_input")
 
-# 定型文ボタン（on_clickで安全に追加）
+# 定型文ボタン
 with st.expander("📋 定型文を利用する", expanded=False):
     t1, t2 = st.columns(2)
     t1.button("原本後日郵送 ＋", use_container_width=True, 
@@ -247,7 +204,7 @@ with st.expander("📋 定型文を利用する", expanded=False):
 
 st.divider()
 
-# --- PDFの生成 & リアルタイム紙面プレビュー表示 ---
+# --- PDFの生成 & HTMLコンポーネントプレビュー表示 ---
 if pharmacy_name or input_mode == "手動入力":
     pdf_buffer = create_pdf(
         pharmacy_name, 
@@ -270,42 +227,88 @@ if pharmacy_name or input_mode == "手動入力":
         use_container_width=True
     )
     
-    # 2. Chromeのブロックを絶対回避するHTML/CSS紙面プレビュー
-    st.markdown("### 👁️ リアルタイムプレビュー")
+    # 2. st.components.v1.html を活用したリアルタイム紙面プレビュー
+    st.subheader("👁️ 送付状 プレビュー")
     
-    urgent_html = '<div class="urgent-tag">【至急配達希望】</div>' if is_urgent else ''
+    today_str = datetime.now().strftime('%Y年%m月%d日')
+    p_name_disp = f"{pharmacy_name} 御中" if pharmacy_name else "御中"
     target_disp = target_info if target_info else "---"
     note_disp = note_text if note_text else "---"
-    today_str = datetime.now().strftime('%Y.%m.%d')
-    p_name_disp = f"{pharmacy_name} 御中" if pharmacy_name else "御中"
-    
+    urgent_header = '<div style="color: #d93025; font-weight: bold; font-size: 16px; margin-bottom: 10px;">【至急配達希望】</div>' if is_urgent else ''
+
     preview_html = f"""
-    <div class="a5-paper">
-        {urgent_html}
-        <div class="paper-title">処 方 箋 送 付 状</div>
-        <div style="font-size: 0.85rem; color: #555;">送信日: {today_str}</div>
-        <div style="font-size: 1.2rem; font-weight: bold; margin-top: 5px;">{p_name_disp}</div>
-        <div style="font-size: 0.85rem; color: #555;">TEL: {tel_number} / FAX: {fax_number}</div>
-        <div class="paper-line"></div>
-        <div style="font-size: 1rem; margin-bottom: 12px;"><strong>受け取り方法：</strong> {delivery_type}</div>
-        <div style="font-size: 0.85rem; line-height: 1.5; color: #333;">
-            いつも大変お世話になっております。<br>
-            以下の通り処方箋を送付いたしますので、ご対応のほど宜しくお願い申し上げます。
+    <div style="background-color: #f0f2f5; padding: 20px; display: flex; justify-content: center; align-items: center;">
+        <div id="fax-content" style="
+            background-color: white;
+            padding: 15mm 18mm 15mm 18mm;
+            width: 148mm;
+            min-height: 210mm;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            border-radius: 4px;
+            font-family: 'Helvetica Neue', Arial, 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif;
+            color: #333;
+            line-height: 1.4;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+        ">
+            {urgent_header}
+            
+            <!-- タイトル -->
+            <div style="text-align: center; margin-bottom: 20px;">
+                <div style="font-size: 22px; font-weight: bold; letter-spacing: 4px; border-bottom: 2px solid #333; display: inline-block; padding: 0 30px 4px 30px; color: #000;">
+                    処 方 箋 送 付 状
+                </div>
+            </div>
+
+            <!-- 送信日 & 宛先 -->
+            <div style="border-bottom: 1px solid #ddd; padding-bottom: 12px; margin-bottom: 15px;">
+                <div style="text-align: right; font-size: 12px; color: #666; margin-bottom: 8px;">
+                    送信日：{today_str}
+                </div>
+                <div style="font-size: 18px; font-weight: bold; color: #111;">
+                    {p_name_disp}
+                </div>
+                <div style="font-size: 13px; color: #555; margin-top: 4px;">
+                    TEL: {tel_number if tel_number else ''} &nbsp;/&nbsp; FAX: {fax_number if fax_number else ''}
+                </div>
+            </div>
+
+            <!-- 内容ステートメント -->
+            <div style="margin-bottom: 15px; font-size: 14px;">
+                <div style="font-weight: bold; margin-bottom: 6px;">受け取り方法： {delivery_type}</div>
+                <div style="color: #444; font-size: 13px; line-height: 1.5;">
+                    いつも大変お世話になっております。<br>
+                    以下の通り処方箋を送付いたしますので、ご対応のほど宜しくお願い申し上げます。
+                </div>
+            </div>
+
+            <div style="border-top: 1px solid #ddd; margin: 10px 0;"></div>
+
+            <!-- 施設・患者名 -->
+            <div style="margin-bottom: 15px;">
+                <div style="font-size: 11px; color: #777; margin-bottom: 3px;">施設・患者名など</div>
+                <div style="font-size: 15px; font-weight: 500; white-space: pre-wrap; color: #111;">{target_disp}</div>
+            </div>
+
+            <!-- 備考 -->
+            <div style="margin-bottom: 20px; flex-grow: 1;">
+                <div style="font-size: 11px; color: #777; margin-bottom: 3px;">備考</div>
+                <div style="font-size: 14px; white-space: pre-wrap; color: #222; line-height: 1.5;">{note_disp}</div>
+            </div>
+
+            <div style="border-top: 1px solid #ddd; margin-bottom: 12px;"></div>
+
+            <!-- 送信元 -->
+            <div style="font-size: 13px; color: #333;">
+                <div style="font-size: 15px; font-weight: bold; color: #000;">陽だまり診療所</div>
+                <div style="font-size: 12px; color: #555;">TEL: 0178-32-7358 &nbsp;/&nbsp; FAX: 0178-32-7359</div>
+            </div>
         </div>
-        <div class="paper-line"></div>
-        <div class="paper-section">
-            <div class="paper-label">施設・患者名など</div>
-            <div class="paper-content">{target_disp}</div>
-        </div>
-        <div class="paper-section">
-            <div class="paper-label">備考</div>
-            <div class="paper-content">{note_disp}</div>
-        </div>
-        <div class="paper-line"></div>
-        <div style="font-size: 0.95rem; font-weight: bold;">陽だまり診療所</div>
-        <div style="font-size: 0.8rem; color: #555;">TEL: 0178-32-7358 / FAX: 0178-32-7359</div>
     </div>
     """
-    st.markdown(preview_html, unsafe_allow_html=True)
+    
+    st.components.v1.html(preview_html, height=720, scrolling=True)
+
 else:
     st.warning("👈 薬局名を選択するか手入力すると、PDFの発行とプレビューが表示されます。")
