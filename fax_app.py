@@ -138,7 +138,8 @@ st.markdown("""
     .stTextInput input, .stTextArea textarea, [data-baseweb="select"] {
         background-color: #f5f5f7 !important; border-radius: 8px !important;
     }
-    .block-container { padding-top: 2rem !important; padding-bottom: 2rem !important; }
+    .block-container { padding-top: 4rem !important; padding-bottom: 2rem !important; }
+    [data-testid="stImage"] img { padding-top: 8px !important; padding-bottom: 4px !important; }
     </style>
     """, unsafe_allow_html=True)
 
