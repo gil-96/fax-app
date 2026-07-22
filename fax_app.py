@@ -96,7 +96,7 @@ def create_pdf(p_name, p_tel, p_fax, d_type, target_info, note_text, is_urgent):
     if not os.path.exists(logo_path): 
         logo_path = "陽だまりロゴ.jpg"
     if os.path.exists(logo_path):
-        p.drawImage(logo_path, 300, height - 715, width=70, preserveAspectRatio=True, mask='auto')
+        p.drawImage(logo_path, 310, 45, width=70, preserveAspectRatio=True, mask='auto')
     
     p.showPage()
     p.save()
@@ -132,13 +132,13 @@ st.markdown("""
 if 'note_input' not in st.session_state: 
     st.session_state['note_input'] = ""
 
-header_col1, header_col2 = st.columns([1, 10])
+header_col1, header_col2 = st.columns([1.5, 10])
 with header_col1:
     logo_top = "logo.png"
     if not os.path.exists(logo_top): 
         logo_top = "陽だまりロゴ.jpg"
     if os.path.exists(logo_top): 
-        st.image(logo_top, width=80)
+        st.image(logo_top, use_container_width=True)
 
 with header_col2:
     st.title("📄 処方箋送付状作成BOT")
@@ -234,7 +234,7 @@ with col_input:
 
 # --- 右カラム：リアルタイムプレビュー ---
 with col_preview:
-    st.subheader("👁️ リアルタイム プレビュー")
+    st.subheader("🔭 リアルタイム プレビュー")
     
     today_str = datetime.now().strftime('%Y年%m月%d日')
     p_name_disp = f"{pharmacy_name} 御中" if pharmacy_name else "御中"
