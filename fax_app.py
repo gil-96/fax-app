@@ -7,19 +7,23 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 import io
 import os
-import re
 import base64
+import textwrap # テキスト折り返し用に追加
 
 st.set_page_config(page_title="処方箋送付状作成BOT", layout="wide")
 
-# --- 1. フォント・環境設定 ---
+# --- 1. 定数・環境設定 ---
 FONT_NAME = "HeiseiMin-W3" 
+
+# セッションステートの初期化
+if 'note_input' not in st.session_state: 
+    st.session_state['note_input'] = ""
 
 def setup_font():
     try:
         pdfmetrics.registerFont(UnicodeCIDFont(FONT_NAME))
-    except Exception:
-        pass
+    except Exception as e:
+        st.error(f"フォントの読み込みに失敗しました: {e}")
 
 @st.cache_data
 def load_data():
@@ -31,12 +35,18 @@ def load_data():
             "TEL番号": ["000-000-0000"], "FAX番号": ["000-000-0000"]
         })
 
+def get_logo_path():
+    """ロゴ画像のパスを取得する共通関数（DRY原則）"""
+    if os.path.exists("logo.png"):
+        return "logo.png"
+    elif os.path.exists("陽だまりロゴ.jpg"):
+        return "陽だまりロゴ.jpg"
+    return None
+
 def get_logo_base64():
-    """ロゴ画像をBase64形式で取得するヘルパー関数"""
-    logo_path = "logo.png"
-    if not os.path.exists(logo_path):
-        logo_path = "陽だまりロゴ.jpg"
-    if os.path.exists(logo_path):
+    """ロゴ画像をBase64形式で取得する"""
+    logo_path = get_logo_path()
+    if logo_path:
         try:
             with open(logo_path, "rb") as image_file:
                 encoded = base64.b64encode(image_file.read()).decode()
@@ -44,18 +54,14 @@ def get_logo_base64():
                 mime = "image/png" if ext == "png" else "image/jpeg"
                 return f"data:{mime};base64,{encoded}"
         except Exception:
-            return ""
+            pass
     return ""
 
 def sanitize_for_pdf(text):
-    """
-    HeiseiMin-W3 (CIDFont) で描画エラーや文字消失の原因となる
-    絵文字や特殊Unicode文字を安全な文字に変換・除去する関数
-    """
+    """絵文字や特殊Unicode文字を安全な文字に変換・除去する関数"""
     if not text:
         return ""
     
-    # 記号の互換置換
     replacements = {
         '〜': '～',
         '①': '(1)', '②': '(2)', '③': '(3)', '④': '(4)', '⑤': '(5)',
@@ -65,12 +71,7 @@ def sanitize_for_pdf(text):
     for orig, repl in replacements.items():
         text = text.replace(orig, repl)
         
-    # サロゲートペアや絵文字（Unicode 範囲 0x10000 以上）を削除
-    clean_chars = []
-    for char in text:
-        if ord(char) < 0x10000:
-            clean_chars.append(char)
-    
+    clean_chars = [char for char in text if ord(char) < 0x10000]
     return "".join(clean_chars)
 
 def create_pdf(p_name, p_tel, p_fax, d_type, target_info, note_text, is_urgent):
@@ -79,7 +80,6 @@ def create_pdf(p_name, p_tel, p_fax, d_type, target_info, note_text, is_urgent):
     width, height = A5
     setup_font()
     
-    # CIDFont用のテキストサニタイズ（文字消滅バグ防止）
     p_name_clean = sanitize_for_pdf(p_name)
     p_tel_clean = sanitize_for_pdf(p_tel)
     p_fax_clean = sanitize_for_pdf(p_fax)
@@ -125,13 +125,21 @@ def create_pdf(p_name, p_tel, p_fax, d_type, target_info, note_text, is_urgent):
     p.setFont(FONT_NAME, 8)
     p.drawString(40, y + 8, "備考")
     
-    # 備考欄の描画（テキスト溢れ防止処理）
     if note_text_clean:
         text_obj = p.beginText(50, y - 8)
         text_obj.setFont(FONT_NAME, 10)
         text_obj.setLeading(14)
-        lines = note_text_clean.split("\n")
-        # フッター領域（y=100付近）を侵害しないよう行数制限
+        
+        # 改善: 長い文字列の折り返し処理を追加（全角約35文字で折り返し）
+        wrap_width = 35 
+        lines = []
+        for raw_line in note_text_clean.split("\n"):
+            wrapped = textwrap.wrap(raw_line, width=wrap_width)
+            if not wrapped: # 空行の処理
+                lines.append("")
+            else:
+                lines.extend(wrapped)
+
         max_lines = 10
         for i, line in enumerate(lines):
             if i < max_lines:
@@ -151,10 +159,8 @@ def create_pdf(p_name, p_tel, p_fax, d_type, target_info, note_text, is_urgent):
     p.setFont(FONT_NAME, 8)
     p.drawString(40, 50, "TEL: 0178-32-7358  /  FAX: 0178-32-7359")
     
-    logo_path = "logo.png"
-    if not os.path.exists(logo_path): 
-        logo_path = "陽だまりロゴ.jpg"
-    if os.path.exists(logo_path):
+    logo_path = get_logo_path()
+    if logo_path:
         try:
             p.drawImage(logo_path, 295, 50, width=85, height=30, preserveAspectRatio=True, mask='auto')
         except Exception:
@@ -167,28 +173,18 @@ def create_pdf(p_name, p_tel, p_fax, d_type, target_info, note_text, is_urgent):
 
 def add_template(text):
     """定型文を追加する安全なコールバック関数"""
-    if 'note_input' not in st.session_state:
-        st.session_state['note_input'] = ""
     st.session_state['note_input'] += text
-
-if 'note_input' not in st.session_state: 
-    st.session_state['note_input'] = ""
 
 st.markdown("""
     <style>
-    /* 全体・ヘッダー背景を完全な白に固定 */
     html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"] { 
         background-color: #ffffff !important; 
         color: #1d1d1f !important; 
     }
-    
-    /* 上部ヘッダー切り欠け防止余白 */
     .block-container {
         padding-top: 3.5rem !important;
         padding-bottom: 2rem !important;
     }
-    
-    /* 入力パーツ等のスタイル指定 */
     input, select, textarea, label, div, p { color: #1d1d1f !important; }
     
     .stDownloadButton > button {
@@ -206,10 +202,8 @@ st.markdown("""
 col_header_logo, col_header_title = st.columns([2.5, 9.5], vertical_alignment="center")
 
 with col_header_logo:
-    logo_top = "logo.png"
-    if not os.path.exists(logo_top): 
-        logo_top = "陽だまりロゴ.jpg"
-    if os.path.exists(logo_top): 
+    logo_top = get_logo_path()
+    if logo_top: 
         st.image(logo_top, use_container_width=True)
 
 with col_header_title:
@@ -219,7 +213,6 @@ st.divider()
 
 col_input, col_preview = st.columns([1, 1.1], gap="large")
 
-# --- 左カラム：入力フォーム ---
 with col_input:
     st.subheader("📝 入力フォーム")
     
@@ -266,7 +259,6 @@ with col_input:
         is_urgent = st.toggle("🚨 至急モード", value=False, key="urgent_toggle")
 
     target_info = st.text_input("🏢 施設名・患者名など", key="target_info")
-
     note_text = st.text_area("✍️ 備考", height=120, key="note_input")
 
     with st.expander("📋 定型文を利用する"):
@@ -291,13 +283,13 @@ with col_input:
         st.info("👆 薬局名を選択または手入力すると、ダウンロードボタンが有効化されます。")
 
 with col_preview:
-    st.subheader("🔭 リアルタイム プレビュー")
+    st.subheader("🔭 プレビュー")
     
     today_str = datetime.now().strftime('%Y年%m月%d日')
     p_name_disp = f"{pharmacy_name} 御中" if pharmacy_name else "御中"
     target_disp = target_info if target_info else "---"
     
-    # プレビュー表示用改行変換
+    # プレビュー表示用改行変換（HTML向け）
     note_disp = note_text.replace("\n", "<br>") if note_text else "---"
     
     urgent_header = '<div style="color: #000; font-weight: bold; font-size: 15px; margin-bottom: 8px;">【至急配達希望】</div>' if is_urgent else ''
@@ -305,6 +297,7 @@ with col_preview:
     logo_b64 = get_logo_base64()
     logo_html = f'<img src="{logo_b64}" style="height: 38px; width: auto; object-fit: contain;">' if logo_b64 else ''
 
+    # JSによるDOMハックを削除し、Streamlitの標準状態更新（フォーカスアウト時）に依存させます
     preview_html = f"""
     <div style="
         background-color: #f0f2f5; 
@@ -380,53 +373,5 @@ with col_preview:
             </div>
         </div>
     </div>
-
-    <!-- 1文字ごとのリアルタイム入力同期スクリプト -->
-    <script>
-    (function attachRealtimeListeners() {{
-        function initSync() {{
-            try {{
-                const parentDoc = window.parent.document;
-                
-                // 1. 施設・患者名入力欄の1文字即時反映
-                const targetInputs = parentDoc.querySelectorAll('input');
-                targetInputs.forEach(input => {{
-                    if (input.getAttribute('aria-label') && input.getAttribute('aria-label').includes('施設名・患者名')) {{
-                        input.removeEventListener('input', updateTarget);
-                        input.addEventListener('input', updateTarget);
-                    }}
-                }});
-
-                function updateTarget(e) {{
-                    const el = document.getElementById('preview-target-info');
-                    if (el) {{
-                        el.innerText = e.target.value.trim() !== '' ? e.target.value : '---';
-                    }}
-                }}
-
-                // 2. 備考欄textareaの1文字即時反映
-                const noteAreas = parentDoc.querySelectorAll('textarea');
-                noteAreas.forEach(area => {{
-                    area.removeEventListener('input', updateNote);
-                    area.addEventListener('input', updateNote);
-                }});
-
-                function updateNote(e) {{
-                    const el = document.getElementById('preview-note-text');
-                    if (el) {{
-                        const val = e.target.value;
-                        el.innerHTML = val.trim() !== '' ? val.replace(/\\n/g, '<br>') : '---';
-                    }}
-                }}
-            }} catch(err) {{
-                // 同一生成元エラー対策
-            }}
-        }}
-
-        // 初期化実行
-        setTimeout(initSync, 300);
-        setTimeout(initSync, 1000);
-    }})();
-    </script>
     """
     st.components.v1.html(preview_html, height=760, scrolling=True)
