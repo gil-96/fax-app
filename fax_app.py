@@ -232,11 +232,13 @@ st.markdown("""
     button[kind="primary"], .stButton > button[data-testid="stBaseButton-primary"] {
         background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
         color: #ffffff !important;
+        text-shadow: 0 0 5px #ffffff, 0 0 10px #ffffff, 0 0 15px rgba(255, 255, 255, 0.8), 0 0 20px rgba(255, 255, 255, 0.6) !important;
         border: none !important;
         box-shadow: 0 4px 12px rgba(37, 99, 235, 0.28) !important;
     }
     button[kind="primary"]:hover, .stButton > button[data-testid="stBaseButton-primary"]:hover {
         background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%) !important;
+        text-shadow: 0 0 8px #ffffff, 0 0 15px #ffffff, 0 0 22px rgba(255, 255, 255, 1) !important;
         box-shadow: 0 6px 16px rgba(37, 99, 235, 0.38) !important;
     }
 
@@ -244,6 +246,7 @@ st.markdown("""
     .stDownloadButton > button {
         background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
         color: #ffffff !important;
+        text-shadow: 0 0 5px #ffffff, 0 0 10px #ffffff, 0 0 15px rgba(255, 255, 255, 0.8), 0 0 20px rgba(255, 255, 255, 0.6) !important;
         font-size: 0.95rem !important;
         font-weight: 700 !important;
         height: 2.6em !important;
@@ -255,12 +258,14 @@ st.markdown("""
     }
     .stDownloadButton > button:hover:not(:disabled) {
         background: linear-gradient(135deg, #059669 0%, #047857 100%) !important;
+        text-shadow: 0 0 8px #ffffff, 0 0 15px #ffffff, 0 0 22px rgba(255, 255, 255, 1) !important;
         box-shadow: 0 6px 16px rgba(16, 185, 129, 0.35) !important;
         transform: translateY(-1px);
     }
     .stDownloadButton > button:disabled {
         background: #e2e8f0 !important;
         color: #94a3b8 !important;
+        text-shadow: none !important;
         border: 1px solid #cbd5e1 !important;
         box-shadow: none !important;
         cursor: not-allowed !important;
