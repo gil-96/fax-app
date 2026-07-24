@@ -323,21 +323,21 @@ with col_input:
     col_mode, col_sort = st.columns([1, 1], gap="small")
     
     with col_mode:
-        input_mode = st.segmented_control("作成モード", ["リストから選択", "手動入力"], default="リストから選択", key="mode_ctrl")
+        input_mode = st.segmented_control("作成モード", ["リスト", "手動"], default="リスト", key="mode_ctrl")
 
     pharmacy_name = ""
     tel_number = ""
     fax_number = ""
 
     with col_sort:
-        if input_mode == "リストから選択":
-            sort_order = st.segmented_control("並び順", ["リスト順", "あいうえお順"], default="リスト順", key="sort_ctrl")
+        if input_mode == "リスト":
+            sort_order = st.segmented_control("並び順", ["常用", "50音"], default="常用", key="sort_ctrl")
         else:
-            sort_order = "リスト順"
+            sort_order = "常用"
 
-    if input_mode == "リストから選択":
+    if input_mode == "リスト":
         df_pharmacy = load_data()
-        df_display = df_pharmacy.sort_values("ふりがな") if sort_order == "あいうえお順" else df_pharmacy
+        df_display = df_pharmacy.sort_values("ふりがな") if sort_order == "50音" else df_pharmacy
 
         search_list = [f"{row['薬局名']} ({row['ふりがな']})" for _, row in df_display.iterrows()]
         
