@@ -174,56 +174,130 @@ def add_template(text):
     """定型文を追加する安全なコールバック関数"""
     st.session_state['note_input'] += text
 
-# コンパクトなレイアウトを実現するためのカスタムCSS
 st.markdown("""
     <style>
-    html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"] { 
-        background-color: #ffffff !important; 
-        color: #1d1d1f !important; 
+    /* 全体背景とフォントの設定 */
+    html, body, [data-testid="stAppViewContainer"] { 
+        background-color: #f8fafc !important; 
+        color: #0f172a !important; 
     }
-    /* 上部マージンを最小限にして縦幅を短縮 */
-    .block-container {
-        padding-top: 1.5rem !important;
-        padding-bottom: 1.5rem !important;
-    }
-    input, select, textarea, label, div, p { color: #1d1d1f !important; }
     
-    /* フォーム要素の間隔をコンパクト化 */
-    div[data-testid="stVerticalBlock"] > div {
-        gap: 0.75rem !important;
+    /* メニューバー（stHeader）との干渉を防ぐ上部余白の確保 */
+    [data-testid="stHeader"] {
+        background-color: rgba(248, 250, 252, 0.8) !important;
+        backdrop-filter: blur(8px);
+    }
+    .block-container {
+        padding-top: 4.2rem !important;
+        padding-bottom: 2.5rem !important;
+        max-width: 1400px;
     }
 
+    input, select, textarea, label, div, p { color: #0f172a !important; }
+
+    /* テキスト入力・エリア・セレクトボックスのモダン化 */
+    .stTextInput input, .stTextArea textarea, div[data-baseweb="select"] > div {
+        background-color: #ffffff !important;
+        border: 1px solid #cbd5e1 !important;
+        border-radius: 10px !important;
+        color: #0f172a !important;
+        font-size: 0.92rem !important;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.03) !important;
+    }
+
+    .stTextInput input:focus, .stTextArea textarea:focus, div[data-baseweb="select"]:focus-within > div {
+        border-color: #3b82f6 !important;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18), 0 1px 2px rgba(0,0,0,0.05) !important;
+    }
+
+    /* ボタンの共通スタイリング */
+    .stButton > button {
+        border-radius: 10px !important;
+        font-weight: 600 !important;
+        font-size: 0.9rem !important;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        border: 1px solid #cbd5e1 !important;
+        background: #ffffff !important;
+        color: #334155 !important;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05) !important;
+    }
+    .stButton > button:hover {
+        border-color: #94a3b8 !important;
+        background: #f1f5f9 !important;
+        color: #0f172a !important;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px -2px rgba(0, 0, 0, 0.08) !important;
+    }
+    .stButton > button:active {
+        transform: translateY(0);
+    }
+
+    /* Primaryボタン (1. PDFを作成) のモダンデザイン */
+    button[kind="primary"], .stButton > button[data-testid="stBaseButton-primary"] {
+        background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
+        color: #ffffff !important;
+        border: none !important;
+        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.28) !important;
+    }
+    button[kind="primary"]:hover, .stButton > button[data-testid="stBaseButton-primary"]:hover {
+        background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%) !important;
+        box-shadow: 0 6px 16px rgba(37, 99, 235, 0.38) !important;
+    }
+
+    /* ダウンロードボタンのモダンデザイン */
     .stDownloadButton > button {
-        background-color: #0071e3 !important; color: white !important;
-        font-size: 1.1rem !important; font-weight: bold !important;
-        height: 2.6em !important; border-radius: 10px !important; border: none !important;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.1); width: 100%;
+        background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+        color: #ffffff !important;
+        font-size: 0.95rem !important;
+        font-weight: 700 !important;
+        height: 2.6em !important;
+        border-radius: 10px !important;
+        border: none !important;
+        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25) !important;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        width: 100%;
+    }
+    .stDownloadButton > button:hover:not(:disabled) {
+        background: linear-gradient(135deg, #059669 0%, #047857 100%) !important;
+        box-shadow: 0 6px 16px rgba(16, 185, 129, 0.35) !important;
+        transform: translateY(-1px);
     }
     .stDownloadButton > button:disabled {
-        background-color: #d2d2d7 !important; color: #86868b !important;
-        box-shadow: none !important; cursor: not-allowed !important;
+        background: #e2e8f0 !important;
+        color: #94a3b8 !important;
+        border: 1px solid #cbd5e1 !important;
+        box-shadow: none !important;
+        cursor: not-allowed !important;
+        transform: none !important;
     }
-    .stTextInput input, .stTextArea textarea, [data-baseweb="select"] {
-        background-color: #f5f5f7 !important; border-radius: 8px !important;
+
+    /* エクスパンダー（定型文アコーディオン）のカスタマイズ */
+    div[data-testid="stExpander"] {
+        background-color: #ffffff !important;
+        border: 1px solid #e2e8f0 !important;
+        border-radius: 10px !important;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
     }
-    
+
     /* タイトルのスタイル最適化 */
     .header-title-text {
-        font-size: 1.5rem;
+        font-size: 1.45rem;
         font-weight: 700;
         margin: 0;
         line-height: 1.2;
+        color: #0f172a;
+        letter-spacing: -0.02em;
     }
     </style>
     """, unsafe_allow_html=True)
 
-# ヘッダー領域（ロゴとタイトルを小型化して1行にインライン配置）
 col_header = st.columns([1, 10], vertical_alignment="center")
 
 with col_header[0]:
     logo_top = get_logo_path()
     if logo_top: 
-        st.image(logo_top, width=65)
+        st.image(logo_top, width=60)
 
 with col_header[1]:
     st.markdown('<p class="header-title-text">📄 処方箋送付状作成BOT</p>', unsafe_allow_html=True)
