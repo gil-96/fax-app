@@ -228,10 +228,20 @@ st.markdown("""
         transform: translateY(0);
     }
 
-    /* Primaryボタン (1. PDFを作成) のモダンデザイン */
+    /* Primaryボタン (1. PDFを作成) の文字色およびモダンデザイン */
+    button[kind="primary"],
+    .stButton > button[data-testid="stBaseButton-primary"],
+    button[kind="primary"] p,
+    button[kind="primary"] span,
+    button[kind="primary"] div,
+    .stButton > button[data-testid="stBaseButton-primary"] p,
+    .stButton > button[data-testid="stBaseButton-primary"] span,
+    .stButton > button[data-testid="stBaseButton-primary"] div {
+        color: #ffffff !important;
+    }
+
     button[kind="primary"], .stButton > button[data-testid="stBaseButton-primary"] {
         background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
-        color: #ffffff !important;
         text-shadow: 0 0 5px #ffffff, 0 0 10px #ffffff, 0 0 15px rgba(255, 255, 255, 0.8), 0 0 20px rgba(255, 255, 255, 0.6) !important;
         border: none !important;
         box-shadow: 0 4px 12px rgba(37, 99, 235, 0.28) !important;
@@ -242,10 +252,16 @@ st.markdown("""
         box-shadow: 0 6px 16px rgba(37, 99, 235, 0.38) !important;
     }
 
-    /* ダウンロードボタンのモダンデザイン */
+    /* ダウンロードボタンの文字色およびモダンデザイン */
+    .stDownloadButton > button,
+    .stDownloadButton > button p,
+    .stDownloadButton > button span,
+    .stDownloadButton > button div {
+        color: #ffffff !important;
+    }
+
     .stDownloadButton > button {
         background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
-        color: #ffffff !important;
         text-shadow: 0 0 5px #ffffff, 0 0 10px #ffffff, 0 0 15px rgba(255, 255, 255, 0.8), 0 0 20px rgba(255, 255, 255, 0.6) !important;
         font-size: 0.95rem !important;
         font-weight: 700 !important;
@@ -262,7 +278,10 @@ st.markdown("""
         box-shadow: 0 6px 16px rgba(16, 185, 129, 0.35) !important;
         transform: translateY(-1px);
     }
-    .stDownloadButton > button:disabled {
+    .stDownloadButton > button:disabled,
+    .stDownloadButton > button:disabled p,
+    .stDownloadButton > button:disabled span,
+    .stDownloadButton > button:disabled div {
         background: #e2e8f0 !important;
         color: #94a3b8 !important;
         text-shadow: none !important;
