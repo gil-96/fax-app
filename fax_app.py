@@ -112,7 +112,7 @@ def create_pdf(p_name, p_tel, p_fax, d_type, target_info, note_text, is_urgent):
     p.drawString(40, y, "いつも大変お世話になっております。")
     p.drawString(40, y - 15, "以下の通り処方箋を送付いたしますので、ご対応のほど宜しくお願い申し上げます。")
     
-    # 枠付きエリア（モダンデザイン）
+    # 枠付きエリア（元のデザインへ復旧）
     y -= 50
     p.setStrokeColorRGB(0.9, 0.9, 0.9)
     p.rect(40, y - 45, width - 80, 50, fill=0, stroke=1) # 施設・患者名枠
