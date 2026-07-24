@@ -176,24 +176,19 @@ def add_template(text):
 
 st.markdown("""
     <style>
-    /* 全体背景とフォントの設定 */
-    html, body, [data-testid="stAppViewContainer"] { 
-        background-color: #f8fafc !important; 
+    /* 強制ライトモード化と真っ白な背景設定 */
+    html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"] { 
+        background-color: #ffffff !important; 
         color: #0f172a !important; 
     }
     
-    /* メニューバー（stHeader）との干渉を防ぐ上部余白の確保 */
-    [data-testid="stHeader"] {
-        background-color: rgba(248, 250, 252, 0.8) !important;
-        backdrop-filter: blur(8px);
-    }
     .block-container {
-        padding-top: 4.2rem !important;
+        padding-top: 2rem !important;
         padding-bottom: 2.5rem !important;
         max-width: 1400px;
     }
 
-    input, select, textarea, label, div, p { color: #0f172a !important; }
+    input, select, textarea, label, div, p, span { color: #0f172a !important; }
 
     /* テキスト入力・エリア・セレクトボックスのモダン化 */
     .stTextInput input, .stTextArea textarea, div[data-baseweb="select"] > div {
@@ -224,7 +219,7 @@ st.markdown("""
     }
     .stButton > button:hover {
         border-color: #94a3b8 !important;
-        background: #f1f5f9 !important;
+        background: #f8fafc !important;
         color: #0f172a !important;
         transform: translateY(-1px);
         box-shadow: 0 4px 8px -2px rgba(0, 0, 0, 0.08) !important;
@@ -280,29 +275,20 @@ st.markdown("""
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
     }
 
-    /* タイトルのスタイル最適化 */
-    .header-title-text {
-        font-size: 1.45rem;
-        font-weight: 700;
-        margin: 0;
-        line-height: 1.2;
+    /* 中央配置のメインタイトル */
+    .page-main-title {
+        text-align: center;
+        font-size: 1.75rem;
+        font-weight: 800;
+        margin-top: 0.5rem;
+        margin-bottom: 1.5rem;
         color: #0f172a;
         letter-spacing: -0.02em;
     }
     </style>
     """, unsafe_allow_html=True)
 
-col_header = st.columns([1, 10], vertical_alignment="center")
-
-with col_header[0]:
-    logo_top = get_logo_path()
-    if logo_top: 
-        st.image(logo_top, width=60)
-
-with col_header[1]:
-    st.markdown('<p class="header-title-text">📄 処方箋送付状作成BOT</p>', unsafe_allow_html=True)
-
-st.divider()
+st.markdown('<div class="page-main-title">処方箋送付状作成</div>', unsafe_allow_html=True)
 
 col_input, col_preview = st.columns([1, 1.1], gap="large")
 
