@@ -242,7 +242,7 @@ st.markdown("""
 
     button[kind="primary"], .stButton > button[data-testid="stBaseButton-primary"] {
         background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
-        text-shadow: 0 0 5px #ffffff, 0 0 10px #ffffff, 0 0 15px rgba(255, 255, 255, 0.8), 0 0 20px rgba(255, 255, 255, 0.6) !important;
+        text-shadow: none !important;
         border: none !important;
         box-shadow: 0 4px 12px rgba(37, 99, 235, 0.28) !important;
     }
@@ -262,7 +262,7 @@ st.markdown("""
 
     .stDownloadButton > button {
         background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
-        text-shadow: 0 0 5px #ffffff, 0 0 10px #ffffff, 0 0 15px rgba(255, 255, 255, 0.8), 0 0 20px rgba(255, 255, 255, 0.6) !important;
+        text-shadow: none !important;
         font-size: 0.95rem !important;
         font-weight: 700 !important;
         height: 2.6em !important;
