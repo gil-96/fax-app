@@ -8,7 +8,7 @@ from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 import io
 import os
 import base64
-import textwrap # テキスト折り返し用に追加
+import textwrap
 
 st.set_page_config(page_title="処方箋送付状作成BOT", layout="wide")
 
@@ -130,12 +130,11 @@ def create_pdf(p_name, p_tel, p_fax, d_type, target_info, note_text, is_urgent):
         text_obj.setFont(FONT_NAME, 10)
         text_obj.setLeading(14)
         
-        # 改善: 長い文字列の折り返し処理を追加（全角約35文字で折り返し）
         wrap_width = 35 
         lines = []
         for raw_line in note_text_clean.split("\n"):
             wrapped = textwrap.wrap(raw_line, width=wrap_width)
-            if not wrapped: # 空行の処理
+            if not wrapped: 
                 lines.append("")
             else:
                 lines.extend(wrapped)
@@ -175,22 +174,29 @@ def add_template(text):
     """定型文を追加する安全なコールバック関数"""
     st.session_state['note_input'] += text
 
+# コンパクトなレイアウトを実現するためのカスタムCSS
 st.markdown("""
     <style>
     html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"] { 
         background-color: #ffffff !important; 
         color: #1d1d1f !important; 
     }
+    /* 上部マージンを最小限にして縦幅を短縮 */
     .block-container {
-        padding-top: 3.5rem !important;
-        padding-bottom: 2rem !important;
+        padding-top: 1.5rem !important;
+        padding-bottom: 1.5rem !important;
     }
     input, select, textarea, label, div, p { color: #1d1d1f !important; }
     
+    /* フォーム要素の間隔をコンパクト化 */
+    div[data-testid="stVerticalBlock"] > div {
+        gap: 0.75rem !important;
+    }
+
     .stDownloadButton > button {
         background-color: #0071e3 !important; color: white !important;
-        font-size: 1.2rem !important; font-weight: bold !important;
-        height: 2.8em !important; border-radius: 12px !important; border: none !important;
+        font-size: 1.1rem !important; font-weight: bold !important;
+        height: 2.6em !important; border-radius: 10px !important; border: none !important;
         box-shadow: 0 4px 12px rgba(0,0,0,0.1); width: 100%;
     }
     .stDownloadButton > button:disabled {
@@ -198,20 +204,29 @@ st.markdown("""
         box-shadow: none !important; cursor: not-allowed !important;
     }
     .stTextInput input, .stTextArea textarea, [data-baseweb="select"] {
-        background-color: #f5f5f7 !important; border-radius: 10px !important;
+        background-color: #f5f5f7 !important; border-radius: 8px !important;
+    }
+    
+    /* タイトルのスタイル最適化 */
+    .header-title-text {
+        font-size: 1.5rem;
+        font-weight: 700;
+        margin: 0;
+        line-height: 1.2;
     }
     </style>
     """, unsafe_allow_html=True)
 
-col_header_logo, col_header_title = st.columns([2.5, 9.5], vertical_alignment="center")
+# ヘッダー領域（ロゴとタイトルを小型化して1行にインライン配置）
+col_header = st.columns([1, 10], vertical_alignment="center")
 
-with col_header_logo:
+with col_header[0]:
     logo_top = get_logo_path()
     if logo_top: 
-        st.image(logo_top, use_container_width=True)
+        st.image(logo_top, width=65)
 
-with col_header_title:
-    st.title("📄 処方箋送付状作成BOT")
+with col_header[1]:
+    st.markdown('<p class="header-title-text">📄 処方箋送付状作成BOT</p>', unsafe_allow_html=True)
 
 st.divider()
 
@@ -220,15 +235,24 @@ col_input, col_preview = st.columns([1, 1.1], gap="large")
 with col_input:
     st.subheader("📝 入力フォーム")
     
-    input_mode = st.segmented_control("作成モード", ["リストから選択", "手動入力"], default="リストから選択")
+    # 作成モードと並び順を横並び（2カラム）に配置
+    col_mode, col_sort = st.columns([1, 1], gap="small")
+    
+    with col_mode:
+        input_mode = st.segmented_control("作成モード", ["リストから選択", "手動入力"], default="リストから選択", key="mode_ctrl")
 
     pharmacy_name = ""
     tel_number = ""
     fax_number = ""
 
+    with col_sort:
+        if input_mode == "リストから選択":
+            sort_order = st.segmented_control("並び順", ["リスト順", "あいうえお順"], default="リスト順", key="sort_ctrl")
+        else:
+            sort_order = "リスト順"
+
     if input_mode == "リストから選択":
         df_pharmacy = load_data()
-        sort_order = st.segmented_control("並び順", ["リスト順", "あいうえお順"], default="リスト順")
         df_display = df_pharmacy.sort_values("ふりがな") if sort_order == "あいうえお順" else df_pharmacy
 
         search_list = [f"{row['薬局名']} ({row['ふりがな']})" for _, row in df_display.iterrows()]
@@ -255,7 +279,6 @@ with col_input:
         tel_number = col_tel.text_input("📞 TEL番号", key="manual_tel")
         fax_number = col_fax.text_input("📠 FAX番号", key="manual_fax")
 
-    st.write("")
     col_a, col_b = st.columns([1.8, 1.2])
     with col_a:
         delivery_type = st.radio("🚚 受け取り方法", ["配達", "薬局で受け取り"], horizontal=True, key="delivery_radio")
@@ -263,7 +286,7 @@ with col_input:
         is_urgent = st.toggle("🚨 至急モード", value=False, key="urgent_toggle")
 
     target_info = st.text_input("🏢 施設名・患者名など", key="target_info")
-    note_text = st.text_area("✍️ 備考", height=120, key="note_input")
+    note_text = st.text_area("✍️ 備考", height=100, key="note_input")
 
     with st.expander("📋 定型文を利用する"):
         t1, t2 = st.columns(2)
@@ -275,12 +298,11 @@ with col_input:
     st.divider()
 
     if pharmacy_name:
-        st.caption("⚠️ 入力内容を変更した場合は、必ず左の「1. PDFを作成」から押してください")
+        st.caption("⚠️ 入力内容を変更した場合は、必ず左の「1. PDFを作成」を押してください")
         
         col_btn1, col_btn2 = st.columns(2)
         
         with col_btn1:
-            # 1. 通常のボタンで入力を確定させ、PDFデータを生成・保存する
             if st.button("🔄 1. PDFを作成 (内容確定)", type="primary", use_container_width=True):
                 with st.spinner("作成中..."):
                     pdf_data = create_pdf(pharmacy_name, tel_number, fax_number, delivery_type, target_info, note_text, is_urgent)
@@ -288,7 +310,6 @@ with col_input:
                     st.session_state['current_pharmacy'] = pharmacy_name
 
         with col_btn2:
-            # 2. PDFデータが生成されており、対象の薬局と一致しているかを判定
             is_ready = 'generated_pdf' in st.session_state and st.session_state.get('current_pharmacy') == pharmacy_name
             
             st.download_button(
@@ -297,7 +318,7 @@ with col_input:
                 file_name=f"送付状_{pharmacy_name}.pdf" if is_ready else "dummy.pdf",
                 mime="application/pdf",
                 use_container_width=True,
-                disabled=not is_ready # 準備ができていなければボタンを無効化
+                disabled=not is_ready
             )
     else:
         st.info("👆 薬局名を選択または手入力すると、作成・ダウンロードボタンが有効化されます。")
@@ -309,7 +330,6 @@ with col_preview:
     p_name_disp = f"{pharmacy_name} 御中" if pharmacy_name else "御中"
     target_disp = target_info if target_info else "---"
     
-    # プレビュー表示用改行変換（HTML向け）
     note_disp = note_text.replace("\n", "<br>") if note_text else "---"
     
     urgent_header = '<div style="color: #000; font-weight: bold; font-size: 15px; margin-bottom: 8px;">【至急配達希望】</div>' if is_urgent else ''
@@ -317,11 +337,10 @@ with col_preview:
     logo_b64 = get_logo_base64()
     logo_html = f'<img src="{logo_b64}" style="height: 38px; width: auto; object-fit: contain;">' if logo_b64 else ''
 
-    # JSによるDOMハックを削除し、Streamlitの標準状態更新（フォーカスアウト時）に依存させます
     preview_html = f"""
     <div style="
         background-color: #f0f2f5; 
-        padding: 20px; 
+        padding: 16px; 
         border-radius: 12px; 
         display: flex; 
         justify-content: center;
@@ -394,4 +413,4 @@ with col_preview:
         </div>
     </div>
     """
-    st.components.v1.html(preview_html, height=760, scrolling=True)
+    st.components.v1.html(preview_html, height=730, scrolling=True)
