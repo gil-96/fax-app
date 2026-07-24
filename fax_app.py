@@ -193,6 +193,10 @@ st.markdown("""
         height: 2.8em !important; border-radius: 12px !important; border: none !important;
         box-shadow: 0 4px 12px rgba(0,0,0,0.1); width: 100%;
     }
+    .stDownloadButton > button:disabled {
+        background-color: #d2d2d7 !important; color: #86868b !important;
+        box-shadow: none !important; cursor: not-allowed !important;
+    }
     .stTextInput input, .stTextArea textarea, [data-baseweb="select"] {
         background-color: #f5f5f7 !important; border-radius: 10px !important;
     }
@@ -271,27 +275,32 @@ with col_input:
     st.divider()
 
     if pharmacy_name:
-        st.warning("⚠️ **入力後は必ず下の「PDFを作成」ボタンを押して内容を確定させてください**")
+        st.caption("⚠️ 入力内容を変更した場合は、必ず左の「1. PDFを作成」から押してください")
         
-        # 1. 通常のボタンで入力を確定させ、PDFデータを生成・保存する
-        if st.button("🔄 入力内容を反映してPDFを作成", type="primary", use_container_width=True):
-            with st.spinner("PDFを作成中..."):
-                pdf_data = create_pdf(pharmacy_name, tel_number, fax_number, delivery_type, target_info, note_text, is_urgent)
-                st.session_state['generated_pdf'] = pdf_data.getvalue()
-                st.session_state['current_pharmacy'] = pharmacy_name # 薬局切り替え時の誤爆防止
+        col_btn1, col_btn2 = st.columns(2)
+        
+        with col_btn1:
+            # 1. 通常のボタンで入力を確定させ、PDFデータを生成・保存する
+            if st.button("🔄 1. PDFを作成 (内容確定)", type="primary", use_container_width=True):
+                with st.spinner("作成中..."):
+                    pdf_data = create_pdf(pharmacy_name, tel_number, fax_number, delivery_type, target_info, note_text, is_urgent)
+                    st.session_state['generated_pdf'] = pdf_data.getvalue()
+                    st.session_state['current_pharmacy'] = pharmacy_name
 
-        # 2. PDFデータが生成されている場合のみダウンロードボタンを表示する
-        if 'generated_pdf' in st.session_state and st.session_state.get('current_pharmacy') == pharmacy_name:
-            st.success("✅ 最新のデータでPDFが作成されました。以下のボタンからダウンロードしてください。")
+        with col_btn2:
+            # 2. PDFデータが生成されており、対象の薬局と一致しているかを判定
+            is_ready = 'generated_pdf' in st.session_state and st.session_state.get('current_pharmacy') == pharmacy_name
+            
             st.download_button(
-                label="📄 作成したPDFをダウンロード",
-                data=st.session_state['generated_pdf'],
-                file_name=f"送付状_{pharmacy_name}.pdf",
+                label="📄 2. ダウンロード" if is_ready else "🚫 先に作成してください",
+                data=st.session_state.get('generated_pdf', b''),
+                file_name=f"送付状_{pharmacy_name}.pdf" if is_ready else "dummy.pdf",
                 mime="application/pdf",
-                use_container_width=True
+                use_container_width=True,
+                disabled=not is_ready # 準備ができていなければボタンを無効化
             )
     else:
-        st.info("👆 薬局名を選択または手入力すると、ダウンロードボタンが有効化されます。")
+        st.info("👆 薬局名を選択または手入力すると、作成・ダウンロードボタンが有効化されます。")
 
 with col_preview:
     st.subheader("🔭 プレビュー")
