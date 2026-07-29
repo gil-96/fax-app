@@ -451,7 +451,7 @@ with col_preview:
             min-height: 200mm;
             padding: 12mm 15mm 10mm 15mm;
             box-shadow: 0 4px 15px rgba(0,0,0,0.15);
-            font-family: 'Hiragino Mincho ProN', 'Yu Mincho', 'MS Mincho', serif;
+            font-family: 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif;
             color: #000;
             box-sizing: border-box;
             display: flex;
