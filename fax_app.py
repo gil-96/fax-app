@@ -7,23 +7,19 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 import io
 import os
+import re
 import base64
-import textwrap
 
 st.set_page_config(page_title="処方箋送付状作成BOT", layout="wide")
 
-# --- 1. 定数・環境設定 ---
+# --- 1. フォント・環境設定 ---
 FONT_NAME = "HeiseiMin-W3" 
-
-# セッションステートの初期化
-if 'note_input' not in st.session_state: 
-    st.session_state['note_input'] = ""
 
 def setup_font():
     try:
         pdfmetrics.registerFont(UnicodeCIDFont(FONT_NAME))
-    except Exception as e:
-        st.error(f"フォントの読み込みに失敗しました: {e}")
+    except Exception:
+        pass
 
 @st.cache_data
 def load_data():
@@ -35,18 +31,12 @@ def load_data():
             "TEL番号": ["000-000-0000"], "FAX番号": ["000-000-0000"]
         })
 
-def get_logo_path():
-    """ロゴ画像のパスを取得する共通関数（DRY原則）"""
-    if os.path.exists("logo.png"):
-        return "logo.png"
-    elif os.path.exists("陽だまりロゴ.jpg"):
-        return "陽だまりロゴ.jpg"
-    return None
-
 def get_logo_base64():
-    """ロゴ画像をBase64形式で取得する"""
-    logo_path = get_logo_path()
-    if logo_path:
+    """ロゴ画像をBase64形式で取得するヘルパー関数"""
+    logo_path = "logo.png"
+    if not os.path.exists(logo_path):
+        logo_path = "陽だまりロゴ.jpg"
+    if os.path.exists(logo_path):
         try:
             with open(logo_path, "rb") as image_file:
                 encoded = base64.b64encode(image_file.read()).decode()
@@ -54,14 +44,18 @@ def get_logo_base64():
                 mime = "image/png" if ext == "png" else "image/jpeg"
                 return f"data:{mime};base64,{encoded}"
         except Exception:
-            pass
+            return ""
     return ""
 
 def sanitize_for_pdf(text):
-    """絵文字や特殊Unicode文字を安全な文字に変換・除去する関数"""
+    """
+    HeiseiMin-W3 (CIDFont) で描画エラーや文字消失の原因となる
+    絵文字や特殊Unicode文字を安全な文字に変換・除去する関数
+    """
     if not text:
         return ""
     
+    # 記号の互換置換
     replacements = {
         '〜': '～',
         '①': '(1)', '②': '(2)', '③': '(3)', '④': '(4)', '⑤': '(5)',
@@ -71,8 +65,62 @@ def sanitize_for_pdf(text):
     for orig, repl in replacements.items():
         text = text.replace(orig, repl)
         
-    clean_chars = [char for char in text if ord(char) < 0x10000]
+    # サロゲートペアや絵文字（Unicode 範囲 0x10000 以上）を削除
+    clean_chars = []
+    for char in text:
+        if ord(char) < 0x10000:
+            clean_chars.append(char)
+    
     return "".join(clean_chars)
+
+def wrap_text_for_pdf(text, max_units=28.0):
+    """
+    CJKテキストをReportLab用に適切な表示幅で改行する関数。
+    電話番号（例: 000-1234-5678）などのハイフン区切り数値は
+    途中で改行されないようアトミックブロック（不分割単位）として処理する。
+    """
+    if not text:
+        return []
+
+    wrapped_lines = []
+    user_lines = text.split("\n")
+
+    for u_line in user_lines:
+        if not u_line:
+            wrapped_lines.append("")
+            continue
+
+        tokens = []
+        i = 0
+        n = len(u_line)
+        while i < n:
+            # 電話番号や型番などのハイフン区切り数字パターンをアトミックブロックとして抽出
+            m = re.match(r'^\d+[\-ー−—]\d+(?:[\-ー−—]\d+)*', u_line[i:])
+            if m:
+                tokens.append(m.group(0))
+                i += len(m.group(0))
+            else:
+                tokens.append(u_line[i])
+                i += 1
+
+        current_line = ""
+        current_width = 0.0
+
+        for token in tokens:
+            # 表示幅計算 (全角=1.0, 半角=0.5)
+            token_width = sum(0.5 if ord(c) < 128 else 1.0 for c in token)
+            if current_width + token_width > max_units and current_line:
+                wrapped_lines.append(current_line)
+                current_line = token
+                current_width = token_width
+            else:
+                current_line += token
+                current_width += token_width
+
+        if current_line:
+            wrapped_lines.append(current_line)
+
+    return wrapped_lines
 
 def create_pdf(p_name, p_tel, p_fax, d_type, target_info, note_text, is_urgent):
     buffer = io.BytesIO()
@@ -80,6 +128,7 @@ def create_pdf(p_name, p_tel, p_fax, d_type, target_info, note_text, is_urgent):
     width, height = A5
     setup_font()
     
+    # CIDFont用のテキストサニタイズ（文字消滅バグ防止）
     p_name_clean = sanitize_for_pdf(p_name)
     p_tel_clean = sanitize_for_pdf(p_tel)
     p_fax_clean = sanitize_for_pdf(p_fax)
@@ -125,20 +174,13 @@ def create_pdf(p_name, p_tel, p_fax, d_type, target_info, note_text, is_urgent):
     p.setFont(FONT_NAME, 8)
     p.drawString(40, y + 8, "備考")
     
+    # 備考欄の描画（テキスト溢れ・勝手なハイフン改行防止処理）
     if note_text_clean:
         text_obj = p.beginText(50, y - 8)
         text_obj.setFont(FONT_NAME, 10)
         text_obj.setLeading(14)
-        
-        wrap_width = 35 
-        lines = []
-        for raw_line in note_text_clean.split("\n"):
-            wrapped = textwrap.wrap(raw_line, width=wrap_width)
-            if not wrapped: 
-                lines.append("")
-            else:
-                lines.extend(wrapped)
-
+        lines = wrap_text_for_pdf(note_text_clean, max_units=28.0)
+        # フッター領域（y=100付近）を侵害しないよう行数制限
         max_lines = 10
         for i, line in enumerate(lines):
             if i < max_lines:
@@ -147,9 +189,7 @@ def create_pdf(p_name, p_tel, p_fax, d_type, target_info, note_text, is_urgent):
                 text_obj.textLine("…（以下省略）")
                 break
         p.drawText(text_obj)
-    else:
-        p.setFont(FONT_NAME, 10)
-        p.drawString(50, y - 8, "---")
+    # 未入力時は何も描画せず空欄にする
     
     # フッター部
     p.line(40, 90, width - 40, 90)
@@ -158,8 +198,10 @@ def create_pdf(p_name, p_tel, p_fax, d_type, target_info, note_text, is_urgent):
     p.setFont(FONT_NAME, 8)
     p.drawString(40, 50, "TEL: 0178-32-7358  /  FAX: 0178-32-7359")
     
-    logo_path = get_logo_path()
-    if logo_path:
+    logo_path = "logo.png"
+    if not os.path.exists(logo_path): 
+        logo_path = "陽だまりロゴ.jpg"
+    if os.path.exists(logo_path):
         try:
             p.drawImage(logo_path, 295, 50, width=85, height=30, preserveAspectRatio=True, mask='auto')
         except Exception:
@@ -172,172 +214,72 @@ def create_pdf(p_name, p_tel, p_fax, d_type, target_info, note_text, is_urgent):
 
 def add_template(text):
     """定型文を追加する安全なコールバック関数"""
+    if 'note_input' not in st.session_state:
+        st.session_state['note_input'] = ""
     st.session_state['note_input'] += text
+
+if 'note_input' not in st.session_state: 
+    st.session_state['note_input'] = ""
 
 st.markdown("""
     <style>
-    /* 強制ライトモード化と真っ白な背景設定 */
+    /* 全体・ヘッダー背景を完全な白に固定 */
     html, body, [data-testid="stAppViewContainer"], [data-testid="stHeader"] { 
         background-color: #ffffff !important; 
-        color: #0f172a !important; 
+        color: #1d1d1f !important; 
     }
     
+    /* 上部ヘッダー切り欠け防止余白 */
     .block-container {
-        padding-top: 2rem !important;
-        padding-bottom: 2.5rem !important;
-        max-width: 1400px;
+        padding-top: 3.5rem !important;
+        padding-bottom: 2rem !important;
     }
-
-    input, select, textarea, label, div, p, span { color: #0f172a !important; }
-
-    /* テキスト入力・エリア・セレクトボックスのモダン化 */
-    .stTextInput input, .stTextArea textarea, div[data-baseweb="select"] > div {
-        background-color: #ffffff !important;
-        border: 1px solid #cbd5e1 !important;
-        border-radius: 10px !important;
-        color: #0f172a !important;
-        font-size: 0.92rem !important;
-        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.03) !important;
-    }
-
-    .stTextInput input:focus, .stTextArea textarea:focus, div[data-baseweb="select"]:focus-within > div {
-        border-color: #3b82f6 !important;
-        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18), 0 1px 2px rgba(0,0,0,0.05) !important;
-    }
-
-    /* ボタンの共通スタイリング */
-    .stButton > button {
-        border-radius: 10px !important;
-        font-weight: 600 !important;
-        font-size: 0.9rem !important;
-        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
-        border: 1px solid #cbd5e1 !important;
-        background: #ffffff !important;
-        color: #334155 !important;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.05) !important;
-    }
-    .stButton > button:hover {
-        border-color: #94a3b8 !important;
-        background: #f8fafc !important;
-        color: #0f172a !important;
-        transform: translateY(-1px);
-        box-shadow: 0 4px 8px -2px rgba(0, 0, 0, 0.08) !important;
-    }
-    .stButton > button:active {
-        transform: translateY(0);
-    }
-
-    /* Primaryボタン (1. PDFを作成) の文字色およびモダンデザイン */
-    button[kind="primary"],
-    .stButton > button[data-testid="stBaseButton-primary"],
-    button[kind="primary"] p,
-    button[kind="primary"] span,
-    button[kind="primary"] div,
-    .stButton > button[data-testid="stBaseButton-primary"] p,
-    .stButton > button[data-testid="stBaseButton-primary"] span,
-    .stButton > button[data-testid="stBaseButton-primary"] div {
-        color: #ffffff !important;
-    }
-
-    button[kind="primary"], .stButton > button[data-testid="stBaseButton-primary"] {
-        background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
-        text-shadow: none !important;
-        border: none !important;
-        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.28) !important;
-    }
-    button[kind="primary"]:hover, .stButton > button[data-testid="stBaseButton-primary"]:hover {
-        background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%) !important;
-        text-shadow: 0 0 8px #ffffff, 0 0 15px #ffffff, 0 0 22px rgba(255, 255, 255, 1) !important;
-        box-shadow: 0 6px 16px rgba(37, 99, 235, 0.38) !important;
-    }
-
-    /* ダウンロードボタンの文字色およびモダンデザイン */
-    .stDownloadButton > button,
-    .stDownloadButton > button p,
-    .stDownloadButton > button span,
-    .stDownloadButton > button div {
-        color: #ffffff !important;
-    }
-
+    
+    /* 入力パーツ等のスタイル指定 */
+    input, select, textarea, label, div, p { color: #1d1d1f !important; }
+    
     .stDownloadButton > button {
-        background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
-        text-shadow: none !important;
-        font-size: 0.95rem !important;
-        font-weight: 700 !important;
-        height: 2.6em !important;
-        border-radius: 10px !important;
-        border: none !important;
-        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25) !important;
-        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
-        width: 100%;
+        background-color: #0071e3 !important; color: white !important;
+        font-size: 1.2rem !important; font-weight: bold !important;
+        height: 2.8em !important; border-radius: 12px !important; border: none !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1); width: 100%;
     }
-    .stDownloadButton > button:hover:not(:disabled) {
-        background: linear-gradient(135deg, #059669 0%, #047857 100%) !important;
-        text-shadow: 0 0 8px #ffffff, 0 0 15px #ffffff, 0 0 22px rgba(255, 255, 255, 1) !important;
-        box-shadow: 0 6px 16px rgba(16, 185, 129, 0.35) !important;
-        transform: translateY(-1px);
-    }
-    .stDownloadButton > button:disabled,
-    .stDownloadButton > button:disabled p,
-    .stDownloadButton > button:disabled span,
-    .stDownloadButton > button:disabled div {
-        background: #e2e8f0 !important;
-        color: #94a3b8 !important;
-        text-shadow: none !important;
-        border: 1px solid #cbd5e1 !important;
-        box-shadow: none !important;
-        cursor: not-allowed !important;
-        transform: none !important;
-    }
-
-    /* エクスパンダー（定型文アコーディオン）のカスタマイズ */
-    div[data-testid="stExpander"] {
-        background-color: #ffffff !important;
-        border: 1px solid #e2e8f0 !important;
-        border-radius: 10px !important;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
-    }
-
-    /* 中央配置のメインタイトル */
-    .page-main-title {
-        text-align: center;
-        font-size: 1.75rem;
-        font-weight: 800;
-        margin-top: 0.5rem;
-        margin-bottom: 1.5rem;
-        color: #0f172a;
-        letter-spacing: -0.02em;
+    .stTextInput input, .stTextArea textarea, [data-baseweb="select"] {
+        background-color: #f5f5f7 !important; border-radius: 10px !important;
     }
     </style>
     """, unsafe_allow_html=True)
 
-st.markdown('<div class="page-main-title">処方箋送付状作成</div>', unsafe_allow_html=True)
+col_header_logo, col_header_title = st.columns([2.5, 9.5], vertical_alignment="center")
+
+with col_header_logo:
+    logo_top = "logo.png"
+    if not os.path.exists(logo_top): 
+        logo_top = "陽だまりロゴ.jpg"
+    if os.path.exists(logo_top): 
+        st.image(logo_top, use_container_width=True)
+
+with col_header_title:
+    st.title("📄 処方箋送付状作成BOT")
+
+st.divider()
 
 col_input, col_preview = st.columns([1, 1.1], gap="large")
 
+# --- 左カラム：入力フォーム ---
 with col_input:
     st.subheader("📝 入力フォーム")
     
-    # 作成モードと並び順を横並び（2カラム）に配置
-    col_mode, col_sort = st.columns([1, 1], gap="small")
-    
-    with col_mode:
-        input_mode = st.segmented_control("作成モード", ["リスト", "手動"], default="リスト", key="mode_ctrl")
+    input_mode = st.segmented_control("作成モード", ["リストから選択", "手動入力"], default="リストから選択")
 
     pharmacy_name = ""
     tel_number = ""
     fax_number = ""
 
-    with col_sort:
-        if input_mode == "リスト":
-            sort_order = st.segmented_control("並び順", ["常用", "50音"], default="常用", key="sort_ctrl")
-        else:
-            sort_order = "常用"
-
-    if input_mode == "リスト":
+    if input_mode == "リストから選択":
         df_pharmacy = load_data()
-        df_display = df_pharmacy.sort_values("ふりがな") if sort_order == "50音" else df_pharmacy
+        sort_order = st.segmented_control("並び順", ["リスト順", "あいうえお順"], default="リスト順")
+        df_display = df_pharmacy.sort_values("ふりがな") if sort_order == "あいうえお順" else df_pharmacy
 
         search_list = [f"{row['薬局名']} ({row['ふりがな']})" for _, row in df_display.iterrows()]
         
@@ -363,6 +305,7 @@ with col_input:
         tel_number = col_tel.text_input("📞 TEL番号", key="manual_tel")
         fax_number = col_fax.text_input("📠 FAX番号", key="manual_fax")
 
+    st.write("")
     col_a, col_b = st.columns([1.8, 1.2])
     with col_a:
         delivery_type = st.radio("🚚 受け取り方法", ["配達", "薬局で受け取り"], horizontal=True, key="delivery_radio")
@@ -370,7 +313,8 @@ with col_input:
         is_urgent = st.toggle("🚨 至急モード", value=False, key="urgent_toggle")
 
     target_info = st.text_input("🏢 施設名・患者名など", key="target_info")
-    note_text = st.text_area("✍️ 備考", height=100, key="note_input")
+
+    note_text = st.text_area("✍️ 備考", height=120, key="note_input")
 
     with st.expander("📋 定型文を利用する"):
         t1, t2 = st.columns(2)
@@ -382,39 +326,26 @@ with col_input:
     st.divider()
 
     if pharmacy_name:
-        st.caption("⚠️ 入力内容を変更した場合は、必ず左の「1. PDFを作成」を押してください")
-        
-        col_btn1, col_btn2 = st.columns(2)
-        
-        with col_btn1:
-            if st.button("🔄 1. PDFを作成 (内容確定)", type="primary", use_container_width=True):
-                with st.spinner("作成中..."):
-                    pdf_data = create_pdf(pharmacy_name, tel_number, fax_number, delivery_type, target_info, note_text, is_urgent)
-                    st.session_state['generated_pdf'] = pdf_data.getvalue()
-                    st.session_state['current_pharmacy'] = pharmacy_name
-
-        with col_btn2:
-            is_ready = 'generated_pdf' in st.session_state and st.session_state.get('current_pharmacy') == pharmacy_name
-            
-            st.download_button(
-                label="📄 2. ダウンロード" if is_ready else "🚫 先に作成してください",
-                data=st.session_state.get('generated_pdf', b''),
-                file_name=f"送付状_{pharmacy_name}.pdf" if is_ready else "dummy.pdf",
-                mime="application/pdf",
-                use_container_width=True,
-                disabled=not is_ready
-            )
+        pdf_data = create_pdf(pharmacy_name, tel_number, fax_number, delivery_type, target_info, note_text, is_urgent)
+        st.download_button(
+            label="📄 PDFを発行（ダウンロード）",
+            data=pdf_data.getvalue(),
+            file_name=f"送付状_{pharmacy_name}.pdf",
+            mime="application/pdf",
+            use_container_width=True
+        )
     else:
-        st.info("👆 薬局名を選択または手入力すると、作成・ダウンロードボタンが有効化されます。")
+        st.info("👆 薬局名を選択または手入力すると、ダウンロードボタンが有効化されます。")
 
 with col_preview:
-    st.subheader("🔭 プレビュー")
+    st.subheader("🔭 リアルタイム プレビュー")
     
     today_str = datetime.now().strftime('%Y年%m月%d日')
     p_name_disp = f"{pharmacy_name} 御中" if pharmacy_name else "御中"
     target_disp = target_info if target_info else "---"
     
-    note_disp = note_text.replace("\n", "<br>") if note_text else "---"
+    # プレビュー表示用改行変換（未入力時は空欄）
+    note_disp = note_text.replace("\n", "<br>") if note_text else ""
     
     urgent_header = '<div style="color: #000; font-weight: bold; font-size: 15px; margin-bottom: 8px;">【至急配達希望】</div>' if is_urgent else ''
     
@@ -424,7 +355,7 @@ with col_preview:
     preview_html = f"""
     <div style="
         background-color: #f0f2f5; 
-        padding: 16px; 
+        padding: 20px; 
         border-radius: 12px; 
         display: flex; 
         justify-content: center;
@@ -496,5 +427,53 @@ with col_preview:
             </div>
         </div>
     </div>
+
+    <!-- 1文字ごとのリアルタイム入力同期スクリプト -->
+    <script>
+    (function attachRealtimeListeners() {{
+        function initSync() {{
+            try {{
+                const parentDoc = window.parent.document;
+                
+                // 1. 施設・患者名入力欄の1文字即時反映
+                const targetInputs = parentDoc.querySelectorAll('input');
+                targetInputs.forEach(input => {{
+                    if (input.getAttribute('aria-label') && input.getAttribute('aria-label').includes('施設名・患者名')) {{
+                        input.removeEventListener('input', updateTarget);
+                        input.addEventListener('input', updateTarget);
+                    }}
+                }});
+
+                function updateTarget(e) {{
+                    const el = document.getElementById('preview-target-info');
+                    if (el) {{
+                        el.innerText = e.target.value.trim() !== '' ? e.target.value : '---';
+                    }}
+                }}
+
+                // 2. 備考欄textareaの1文字即時反映
+                const noteAreas = parentDoc.querySelectorAll('textarea');
+                noteAreas.forEach(area => {
+                    area.removeEventListener('input', updateNote);
+                    area.addEventListener('input', updateNote);
+                });
+
+                function updateNote(e) {
+                    const el = document.getElementById('preview-note-text');
+                    if (el) {
+                        const val = e.target.value;
+                        el.innerHTML = val.trim() !== '' ? val.replace(/\n/g, '<br>') : '';
+                    }
+                }
+            } catch(err) {
+                // 同一生成元エラー対策
+            }
+        }
+
+        // 初期化実行
+        setTimeout(initSync, 300);
+        setTimeout(initSync, 1000);
+    })();
+    </script>
     """
-    st.components.v1.html(preview_html, height=730, scrolling=True)
+    st.components.v1.html(preview_html, height=760, scrolling=True)
