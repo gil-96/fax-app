@@ -453,27 +453,27 @@ with col_preview:
 
                 // 2. 備考欄textareaの1文字即時反映
                 const noteAreas = parentDoc.querySelectorAll('textarea');
-                noteAreas.forEach(area => {
+                noteAreas.forEach(area => {{
                     area.removeEventListener('input', updateNote);
                     area.addEventListener('input', updateNote);
-                });
+                }});
 
-                function updateNote(e) {
+                function updateNote(e) {{
                     const el = document.getElementById('preview-note-text');
-                    if (el) {
+                    if (el) {{
                         const val = e.target.value;
                         el.innerHTML = val.trim() !== '' ? val.replace(/\n/g, '<br>') : '';
-                    }
-                }
-            } catch(err) {
+                    }}
+                }}
+            }} catch(err) {{
                 // 同一生成元エラー対策
-            }
-        }
+            }}
+        }}
 
         // 初期化実行
         setTimeout(initSync, 300);
         setTimeout(initSync, 1000);
-    })();
+    }})();
     </script>
     """
     st.components.v1.html(preview_html, height=760, scrolling=True)
