@@ -73,55 +73,6 @@ def sanitize_for_pdf(text):
     
     return "".join(clean_chars)
 
-def wrap_text_for_pdf(text, max_units=28.0):
-    """
-    CJKテキストをReportLab用に適切な表示幅で改行する関数。
-    電話番号（例: 000-1234-5678）などのハイフン区切り数値は
-    途中で改行されないようアトミックブロック（不分割単位）として処理する。
-    """
-    if not text:
-        return []
-
-    wrapped_lines = []
-    user_lines = text.split("\n")
-
-    for u_line in user_lines:
-        if not u_line:
-            wrapped_lines.append("")
-            continue
-
-        tokens = []
-        i = 0
-        n = len(u_line)
-        while i < n:
-            # 電話番号や型番などのハイフン区切り数字パターンをアトミックブロックとして抽出
-            m = re.match(r'^\d+[\-ー−—]\d+(?:[\-ー−—]\d+)*', u_line[i:])
-            if m:
-                tokens.append(m.group(0))
-                i += len(m.group(0))
-            else:
-                tokens.append(u_line[i])
-                i += 1
-
-        current_line = ""
-        current_width = 0.0
-
-        for token in tokens:
-            # 表示幅計算 (全角=1.0, 半角=0.5)
-            token_width = sum(0.5 if ord(c) < 128 else 1.0 for c in token)
-            if current_width + token_width > max_units and current_line:
-                wrapped_lines.append(current_line)
-                current_line = token
-                current_width = token_width
-            else:
-                current_line += token
-                current_width += token_width
-
-        if current_line:
-            wrapped_lines.append(current_line)
-
-    return wrapped_lines
-
 def create_pdf(p_name, p_tel, p_fax, d_type, target_info, note_text, is_urgent):
     buffer = io.BytesIO()
     p = canvas.Canvas(buffer, pagesize=A5)
@@ -174,12 +125,12 @@ def create_pdf(p_name, p_tel, p_fax, d_type, target_info, note_text, is_urgent):
     p.setFont(FONT_NAME, 8)
     p.drawString(40, y + 8, "備考")
     
-    # 備考欄の描画（テキスト溢れ・勝手なハイフン改行防止処理）
+    # 備考欄の描画（テキスト溢れ防止処理）
     if note_text_clean:
         text_obj = p.beginText(50, y - 8)
         text_obj.setFont(FONT_NAME, 10)
         text_obj.setLeading(14)
-        lines = wrap_text_for_pdf(note_text_clean, max_units=28.0)
+        lines = note_text_clean.split("\n")
         # フッター領域（y=100付近）を侵害しないよう行数制限
         max_lines = 10
         for i, line in enumerate(lines):
@@ -189,7 +140,9 @@ def create_pdf(p_name, p_tel, p_fax, d_type, target_info, note_text, is_urgent):
                 text_obj.textLine("…（以下省略）")
                 break
         p.drawText(text_obj)
-    # 未入力時は何も描画せず空欄にする
+    else:
+        p.setFont(FONT_NAME, 10)
+        p.drawString(50, y - 8, "---")
     
     # フッター部
     p.line(40, 90, width - 40, 90)
@@ -344,8 +297,8 @@ with col_preview:
     p_name_disp = f"{pharmacy_name} 御中" if pharmacy_name else "御中"
     target_disp = target_info if target_info else "---"
     
-    # プレビュー表示用改行変換（未入力時は空欄）
-    note_disp = note_text.replace("\n", "<br>") if note_text else ""
+    # プレビュー表示用改行変換
+    note_disp = note_text.replace("\n", "<br>") if note_text else "---"
     
     urgent_header = '<div style="color: #000; font-weight: bold; font-size: 15px; margin-bottom: 8px;">【至急配達希望】</div>' if is_urgent else ''
     
@@ -462,7 +415,7 @@ with col_preview:
                     const el = document.getElementById('preview-note-text');
                     if (el) {{
                         const val = e.target.value;
-                        el.innerHTML = val.trim() !== '' ? val.replace(/\n/g, '<br>') : '';
+                        el.innerHTML = val.trim() !== '' ? val.replace(/\\n/g, '<br>') : '---';
                     }}
                 }}
             }} catch(err) {{
