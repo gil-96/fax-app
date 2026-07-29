@@ -358,13 +358,13 @@ with col_preview:
                 <!-- 施設・患者名など -->
                 <div style="margin-bottom: 12px;">
                     <div style="font-size: 10px; color: #666; margin-bottom: 2px;">■ 施設・患者名など</div>
-                    <div id="preview-target-info" style="font-size: 13px; font-weight: bold; padding-left: 8px;">{target_disp}</div>
+                    <div style="font-size: 13px; font-weight: bold; padding-left: 8px;">{target_disp}</div>
                 </div>
 
                 <!-- 備考 -->
                 <div style="margin-bottom: 15px;">
                     <div style="font-size: 10px; color: #666; margin-bottom: 2px;">■ 備考</div>
-                    <div id="preview-note-text" style="font-size: 12px; padding-left: 8px; line-height: 1.5; word-break: break-all;">{note_disp}</div>
+                    <div style="font-size: 12px; padding-left: 8px; line-height: 1.5; word-break: break-all;">{note_disp}</div>
                 </div>
             </div>
 
@@ -380,53 +380,5 @@ with col_preview:
             </div>
         </div>
     </div>
-
-    <!-- 1文字ごとのリアルタイム入力同期スクリプト -->
-    <script>
-    (function attachRealtimeListeners() {{
-        function initSync() {{
-            try {{
-                const parentDoc = window.parent.document;
-                
-                // 1. 施設・患者名入力欄の1文字即時反映
-                const targetInputs = parentDoc.querySelectorAll('input');
-                targetInputs.forEach(input => {{
-                    if (input.getAttribute('aria-label') && input.getAttribute('aria-label').includes('施設名・患者名')) {{
-                        input.removeEventListener('input', updateTarget);
-                        input.addEventListener('input', updateTarget);
-                    }}
-                }});
-
-                function updateTarget(e) {{
-                    const el = document.getElementById('preview-target-info');
-                    if (el) {{
-                        el.innerText = e.target.value.trim() !== '' ? e.target.value : '---';
-                    }}
-                }}
-
-                // 2. 備考欄textareaの1文字即時反映
-                const noteAreas = parentDoc.querySelectorAll('textarea');
-                noteAreas.forEach(area => {{
-                    area.removeEventListener('input', updateNote);
-                    area.addEventListener('input', updateNote);
-                }});
-
-                function updateNote(e) {{
-                    const el = document.getElementById('preview-note-text');
-                    if (el) {{
-                        const val = e.target.value;
-                        el.innerHTML = val.trim() !== '' ? val.replace(/\\n/g, '<br>') : '---';
-                    }}
-                }}
-            }} catch(err) {{
-                // 同一生成元エラー対策
-            }}
-        }}
-
-        // 初期化実行
-        setTimeout(initSync, 300);
-        setTimeout(initSync, 1000);
-    }})();
-    </script>
     """
     st.components.v1.html(preview_html, height=760, scrolling=True)
