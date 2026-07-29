@@ -133,7 +133,8 @@ def create_pdf(p_name, p_tel, p_fax, d_type, target_info, note_text, is_urgent):
         wrap_width = 35 
         lines = []
         for raw_line in note_text_clean.split("\n"):
-            wrapped = textwrap.wrap(raw_line, width=wrap_width)
+            # 修正依頼2：break_on_hyphens=False を追加してハイフンでの自動改行を防ぐ
+            wrapped = textwrap.wrap(raw_line, width=wrap_width, break_on_hyphens=False)
             if not wrapped: 
                 lines.append("")
             else:
@@ -147,9 +148,7 @@ def create_pdf(p_name, p_tel, p_fax, d_type, target_info, note_text, is_urgent):
                 text_obj.textLine("…（以下省略）")
                 break
         p.drawText(text_obj)
-    else:
-        p.setFont(FONT_NAME, 10)
-        p.drawString(50, y - 8, "---")
+    # 修正依頼1：elseブロック（"---"の描画）を削除し、何も入力されていない場合は空欄にする
     
     # フッター部
     p.line(40, 90, width - 40, 90)
@@ -414,7 +413,8 @@ with col_preview:
     p_name_disp = f"{pharmacy_name} 御中" if pharmacy_name else "御中"
     target_disp = target_info if target_info else "---"
     
-    note_disp = note_text.replace("\n", "<br>") if note_text else "---"
+    # 修正依頼1：プレビュー画面の備考も空欄になるように修正（"---" へのフォールバックをなくす）
+    note_disp = note_text.replace("\n", "<br>") if note_text else ""
     
     urgent_header = '<div style="color: #000; font-weight: bold; font-size: 15px; margin-bottom: 8px;">【至急配達希望】</div>' if is_urgent else ''
     
