@@ -74,6 +74,30 @@ def sanitize_for_pdf(text):
     clean_chars = [char for char in text if ord(char) < 0x10000]
     return "".join(clean_chars)
 
+def get_wrapped_note_lines(text):
+    """備考欄のテキストをPDFとプレビューで共通のロジック(35文字)で折り返す"""
+    if not text:
+        return []
+    
+    wrap_width = 35 
+    lines = []
+    for raw_line in text.split("\n"):
+        wrapped = textwrap.wrap(raw_line, width=wrap_width, break_on_hyphens=False)
+        if not wrapped: 
+            lines.append("")
+        else:
+            lines.extend(wrapped)
+
+    max_lines = 10
+    result = []
+    for i, line in enumerate(lines):
+        if i < max_lines:
+            result.append(line)
+        elif i == max_lines:
+            result.append("…（以下省略）")
+            break
+    return result
+
 def create_pdf(p_name, p_tel, p_fax, d_type, target_info, note_text, is_urgent):
     buffer = io.BytesIO()
     p = canvas.Canvas(buffer, pagesize=A5)
@@ -130,25 +154,12 @@ def create_pdf(p_name, p_tel, p_fax, d_type, target_info, note_text, is_urgent):
         text_obj.setFont(FONT_NAME, 10)
         text_obj.setLeading(14)
         
-        wrap_width = 35 
-        lines = []
-        for raw_line in note_text_clean.split("\n"):
-            # 修正依頼2：break_on_hyphens=False を追加してハイフンでの自動改行を防ぐ
-            wrapped = textwrap.wrap(raw_line, width=wrap_width, break_on_hyphens=False)
-            if not wrapped: 
-                lines.append("")
-            else:
-                lines.extend(wrapped)
-
-        max_lines = 10
-        for i, line in enumerate(lines):
-            if i < max_lines:
-                text_obj.textLine(line)
-            elif i == max_lines:
-                text_obj.textLine("…（以下省略）")
-                break
+        # 共通の折り返し処理を呼び出す
+        lines = get_wrapped_note_lines(note_text_clean)
+        for line in lines:
+            text_obj.textLine(line)
+            
         p.drawText(text_obj)
-    # 修正依頼1：elseブロック（"---"の描画）を削除し、何も入力されていない場合は空欄にする
     
     # フッター部
     p.line(40, 90, width - 40, 90)
@@ -413,8 +424,12 @@ with col_preview:
     p_name_disp = f"{pharmacy_name} 御中" if pharmacy_name else "御中"
     target_disp = target_info if target_info else "---"
     
-    # 修正依頼1：プレビュー画面の備考も空欄になるように修正（"---" へのフォールバックをなくす）
-    note_disp = note_text.replace("\n", "<br>") if note_text else ""
+    # PDFと全く同じ折り返し処理を適用してプレビューの改行位置を同期させる
+    if note_text:
+        preview_lines = get_wrapped_note_lines(note_text)
+        note_disp = "<br>".join(preview_lines)
+    else:
+        note_disp = ""
     
     urgent_header = '<div style="color: #000; font-weight: bold; font-size: 15px; margin-bottom: 8px;">【至急配達希望】</div>' if is_urgent else ''
     
@@ -436,7 +451,7 @@ with col_preview:
             min-height: 200mm;
             padding: 12mm 15mm 10mm 15mm;
             box-shadow: 0 4px 15px rgba(0,0,0,0.15);
-            font-family: 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif;
+            font-family: 'Hiragino Mincho ProN', 'Yu Mincho', 'MS Mincho', serif;
             color: #000;
             box-sizing: border-box;
             display: flex;
@@ -480,7 +495,7 @@ with col_preview:
                 <!-- 備考 -->
                 <div style="margin-bottom: 15px;">
                     <div style="font-size: 10px; color: #666; margin-bottom: 2px;">■ 備考</div>
-                    <div id="preview-note-text" style="font-size: 12px; padding-left: 8px; line-height: 1.5; word-break: break-all;">{note_disp}</div>
+                    <div id="preview-note-text" style="font-size: 12px; padding-left: 8px; line-height: 1.5;">{note_disp}</div>
                 </div>
             </div>
 
