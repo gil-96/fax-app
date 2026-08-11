@@ -20,6 +20,7 @@ if 'note_input' not in st.session_state:
     st.session_state['note_input'] = ""
 
 def setup_font():
+    """PDF出力用のフォント登録"""
     try:
         pdfmetrics.registerFont(UnicodeCIDFont(FONT_NAME))
     except Exception as e:
@@ -27,6 +28,7 @@ def setup_font():
 
 @st.cache_data
 def load_data():
+    """薬局マスターデータの読み込み"""
     try:
         return pd.read_csv("pharmacy_list.csv")
     except Exception:
@@ -98,7 +100,8 @@ def get_wrapped_note_lines(text):
             break
     return result
 
-def create_pdf(p_name, p_tel, p_fax, d_type, target_info, note_text, is_urgent):
+def create_pdf(p_name, p_tel, p_fax, d_type, target_info, note_text, is_urgent, is_replacement):
+    """PDFドキュメントを生成する関数"""
     buffer = io.BytesIO()
     p = canvas.Canvas(buffer, pagesize=A5)
     width, height = A5
@@ -110,9 +113,16 @@ def create_pdf(p_name, p_tel, p_fax, d_type, target_info, note_text, is_urgent):
     target_info_clean = sanitize_for_pdf(target_info)
     note_text_clean = sanitize_for_pdf(note_text)
     
+    # 至急モード・差し替えモードのヘッダーテキストを動的に生成
+    header_labels = []
     if is_urgent:
-        p.setFont(FONT_NAME, 16)
-        p.drawString(40, height - 40, "【至急配達希望】")
+        header_labels.append("【至急配達希望】")
+    if is_replacement:
+        header_labels.append("【修正版差し替え希望】")
+        
+    if header_labels:
+        p.setFont(FONT_NAME, 14)
+        p.drawString(40, height - 40, " ".join(header_labels))
     
     p.setFont(FONT_NAME, 18)
     p.drawCentredString(width/2, height - 70, "処 方 箋 送 付 状")
@@ -373,11 +383,13 @@ with col_input:
         tel_number = col_tel.text_input("📞 TEL番号", key="manual_tel")
         fax_number = col_fax.text_input("📠 FAX番号", key="manual_fax")
 
-    col_a, col_b = st.columns([1.8, 1.2])
+    col_a, col_b, col_c = st.columns([1.4, 0.9, 1.1])
     with col_a:
         delivery_type = st.radio("🚚 受け取り方法", ["配達", "薬局で受け取り"], horizontal=True, key="delivery_radio")
     with col_b:
         is_urgent = st.toggle("🚨 至急モード", value=False, key="urgent_toggle")
+    with col_c:
+        is_replacement = st.toggle("🔄 差し替えモード", value=False, key="replacement_toggle")
 
     target_info = st.text_input("🏢 施設名・患者名など", key="target_info")
     note_text = st.text_area("✍️ 備考", height=100, key="note_input")
@@ -399,7 +411,7 @@ with col_input:
         with col_btn1:
             if st.button("🔄 1. PDFを作成 (内容確定)", type="primary", use_container_width=True):
                 with st.spinner("作成中..."):
-                    pdf_data = create_pdf(pharmacy_name, tel_number, fax_number, delivery_type, target_info, note_text, is_urgent)
+                    pdf_data = create_pdf(pharmacy_name, tel_number, fax_number, delivery_type, target_info, note_text, is_urgent, is_replacement)
                     st.session_state['generated_pdf'] = pdf_data.getvalue()
                     st.session_state['current_pharmacy'] = pharmacy_name
 
@@ -431,7 +443,13 @@ with col_preview:
     else:
         note_disp = ""
     
-    urgent_header = '<div style="color: #000; font-weight: bold; font-size: 15px; margin-bottom: 8px;">【至急配達希望】</div>' if is_urgent else ''
+    preview_headers = []
+    if is_urgent:
+        preview_headers.append("【至急配達希望】")
+    if is_replacement:
+        preview_headers.append("【修正版差し替え希望】")
+        
+    urgent_header = f'<div style="color: #000; font-weight: bold; font-size: 15px; margin-bottom: 8px;">{" ".join(preview_headers)}</div>' if preview_headers else ''
     
     logo_b64 = get_logo_base64()
     logo_html = f'<img src="{logo_b64}" style="height: 38px; width: auto; object-fit: contain;">' if logo_b64 else ''
